@@ -1,0 +1,67 @@
+Directory is /home/songpengcheng/project/SAM_torch
+This job runs on the following nodes: g0117
+This job has allocated 1 cpu cores.
+---------------------------------------------
+Time is Wed Jan 8 14:27:25 CST 2025
+=========================== Starting data generation ===========================
+Dataset Size: torch.Size([100000, 125, 3])
+Dim: 3
+Num of Total Particles: 125
+Num of SB-SAM Particles: 125
+Total time = 0.07691m
+=========================== Finished data generation  ===========================
+
+=========================== Starting Training ===========================
+epoch: 0	 loss: 649.31757
+epoch: 100	 loss: 46.96338
+epoch: 200	 loss: 30.77014
+epoch: 300	 loss: 25.83910
+epoch: 400	 loss: 21.85186
+epoch: 500	 loss: 16.69386
+epoch: 600	 loss: 17.62158
+epoch: 700	 loss: 18.56479
+epoch: 800	 loss: 15.57049
+epoch: 900	 loss: 14.90814
+epoch: 1000	 loss: 16.37380
+epoch: 1100	 loss: 14.11538
+epoch: 1200	 loss: 16.66109
+epoch: 1300	 loss: 13.70901
+epoch: 1400	 loss: 12.26513
+epoch: 1500	 loss: 12.95953
+epoch: 1600	 loss: 12.77287
+epoch: 1700	 loss: 11.60825
+epoch: 1800	 loss: 12.32917
+epoch: 1900	 loss: 14.05454
+epoch: 2000	 loss: 11.48860
+epoch: 2100	 loss: 10.39307
+epoch: 2200	 loss: 10.58700
+epoch: 2300	 loss: 10.95228
+epoch: 2400	 loss: 11.60434
+epoch: 2500	 loss: 10.33424
+epoch: 2600	 loss: 9.65094
+epoch: 2700	 loss: 10.02107
+epoch: 2800	 loss: 11.97733
+epoch: 2900	 loss: 9.69407
+=========================== Finished Training ===========================
+
+=========================== Start Sampling ===========================
+Num of trajectories: 20000
+Num of SDE Steps: 2000
+Smallest time step: 0.01
+Total time = 0.21078m
+=========================== Finished Sampling ===========================
+
+============== data ==============
+All data:
+ 20000 
+
+Processed data:
+ 11244 
+
+error of mean:
+ tensor(0.0013, device='cuda:0') 
+
+error of coviriance:
+ tensor(0.0142, device='cuda:0') 
+
+End at Wed Jan 8 15:01:16 CST 2025

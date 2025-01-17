@@ -1,0 +1,39 @@
+# change batch_size
+# network
+depth: 3
+width: 512
+use_bn: False
+
+# 
+sigma_DSM: 1
+sigma_min: 0.01
+sigma_max: 0.2
+eps: 0.01
+
+# data
+d: 3
+n_all_per_dim: 7
+
+min_grid: -3.
+max_grid: 3.
+min_sam: -3.
+max_sam: 3.
+
+# 
+ntrajs_train: 100000
+ntrajs_sample: 50000
+
+# optimization
+lr_train: 1.0e-3
+lr_sde: 1.0e-4
+batch_size: 4096
+n_epochs: 2000
+n_steps: 1000
+
+# physics
+d_max: 5
+k0: 0.1
+T: 1
+
+# verbose
+print_interval: 100

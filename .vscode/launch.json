@@ -1,0 +1,35 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "main",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["--config=params_save.yml"]
+        },
+        {
+            "name": "testFVE",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "testFVE.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["--config=params3.yml"]
+        },
+        {
+            "name": "visual",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./notebooks/visual.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["--config=./output/params/params_20250109_114640_N125_n125.yml"]
+        }
+    ]
+}
