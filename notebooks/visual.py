@@ -10,7 +10,7 @@ from SAM.sde_lib import VESDE
 from SAM.utils import Euler_Maruyama_sampler, pc_sampler
 from SAM.utils import stress_LMC, stress_MD, force
 from SAM.utils import set_seed
-from SAM.data import generate_data, generate_PDC_data, process_data, eq_D2Virial
+from SAM.datasets import generate_data, generate_PDC_data, process_data, eq_D2Virial
 
 from matplotlib import pyplot as plt # type: ignore
 

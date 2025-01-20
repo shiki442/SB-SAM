@@ -5,8 +5,7 @@ use_bn: False
 
 # 
 sigma_DSM: 1
-sigma_min: 0.01
-sigma_max: 0.2
+
 
 eps: 0.01
 
@@ -24,7 +23,14 @@ ntrajs_train: 50000
 ntrajs_sample: 20000
 
 # optimization
+optimizer: 'Adam'
 lr_train: 1.0e-3
+beta1: 0.9
+eps: 1.0e-8
+weight_decay: 0
+warmup: 0
+grad_clip: -1
+
 lr_sde: 1.0e-4
 batch_size: 2048
 n_epochs: 5000
@@ -37,3 +43,13 @@ T: 1
 
 # verbose
 print_interval: 20
+
+model:
+  name: 'ScoreNet'
+  sigma_min: 0.01
+  sigma_max: 0.2
+  num_scales: 1000
+
+training:
+  sde: 'vesde'
+

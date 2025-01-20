@@ -1,10 +1,42 @@
 import torch
+from torch.utils.data import Dataset, DataLoader
+
 import time
 import math
 from SAM import cfg
 from SAM.utils import force
 
+class SamDataset(Dataset):
+    def __init__(self, x_train):
+        super().__init__()
+        self.x_train = x_train
+        self.shape = [x_train.shape[0], x_train.shape[1]*x_train.shape[2]]
+
+    def __len__(self):
+        return self.x_train.shape[0]
+
+    def __getitem__(self, idx):
+        return torch.flatten(self.x_train[idx], start_dim=-2)
+
+
+class MyDataset(Dataset):
+    def __init__(self, x_train):
+        super().__init__()
+        self.x_train = x_train
+        self.shape = x_train.shape
+
+    def __len__(self):
+        return self.x_train.shape[0]
+
+    def __getitem__(self, idx):
+        return self.x_train[idx]
+
 ###====================================   Dataset   ==============================================================
+def get_dataloader(cfg):
+    _ , sample_sam = generate_data(cfg)
+    dataset = SamDataset(sample_sam)
+    return DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True)
+
 def generate_gauss_data(mean, d2V, d, T):
     x_all = torch.empty([cfg.ntrajs_train, mean.shape[0], d])
     # mean = torch.zeros_like(mean)
@@ -14,7 +46,6 @@ def generate_gauss_data(mean, d2V, d, T):
         sampler  = torch.distributions.MultivariateNormal(mean[:, i], cov[i])
         x_all[:,:,i] = sampler.sample((cfg.ntrajs_train, ))
     return x_all
-
 
 def get_mean_cov(mu=0., sigma=1., random=False):
     mean = mu*torch.ones(cfg.n_all)  # Mean vector
@@ -138,17 +169,20 @@ def process_data(x_pred, x_ref_sam):
     x_pred_p = x_pred.view(n_pred, cfg.n_sam, cfg.d)
     return x_pred_p
 
-
-def generate_data():
-    """Generate a dataset from the example problem."""
-    print(f"=========================== Starting data generation ===========================")
-    start_time = time.time()
-
+def get_data_params(cfg):
     x_ref_all = generate_grid(cfg.d, cfg.n_all_per_dim, cfg.min_grid, cfg.max_grid)
     indij_ref = generate_grid(cfg.d, cfg.n_all_per_dim, mode='index')
     ind_sam = index_sam(x_ref_all)
     indij_near = nearest_particles(indij_ref, cfg.d_max)
     d2V = D2Virial(indij_ref, indij_near, cfg.n_all_per_dim)
+    return x_ref_all, d2V, ind_sam
+
+def generate_data(cfg):
+    """Generate a dataset from the example problem."""
+    print(f"=========================== Starting data generation ===========================")
+    start_time = time.time()
+
+    x_ref_all, d2V, ind_sam = get_data_params(cfg)
     sample_all = generate_gauss_data(x_ref_all, d2V, cfg.d, cfg.T)
 
     end_time = time.time()
@@ -159,7 +193,7 @@ def generate_data():
     print(f"Total time = {(end_time-start_time)/60.:.5f}m")
     print(f"=========================== Finished data generation  ===========================\n")
 
-    return sample_all.to(cfg.device), x_ref_all.to(cfg.device), d2V.to(cfg.device), ind_sam.to(cfg.device)
+    return sample_all.to(cfg.device), sample_all[:, ind_sam, :].to(cfg.device)
 
 
 def generate_PDC_data():

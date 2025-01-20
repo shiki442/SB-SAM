@@ -5,14 +5,14 @@ import torch.multiprocessing as mp
 import shutil, os
 
 # self-defined tools
-from SAM import cfg, SEED
+from SAM import cfg, SEED, datasets, utils
 from SAM.train import train_model, train_model_ddp
 from SAM.nn import ScoreNet, Unet
 # from SAM.nn import marginal_prob_std, diffusion_coeff
-from SAM.utils import Euler_Maruyama_sampler, pc_sampler
-from SAM.utils import set_seed, SamDataset, MyDataset
+from SAM.sampling import Euler_Maruyama_sampler, pc_sampler
+from SAM.utils import set_seed
 from SAM.utils import stress_MD, stress_LMC, force
-from SAM.data import generate_data, eq_D2Virial, process_data
+from SAM.datasets import generate_data, eq_D2Virial, process_data, SamDataset
 from SAM.sde_lib import VESDE
 
 os.environ['MASTER_ADDR'] = '127.0.0.1'
@@ -21,25 +21,16 @@ os.environ['MASTER_PORT'] = '64060'
 if __name__ == "__main__":
     # =========================================== Score matching ===========================================
     set_seed(SEED)
-    sample_all, x_ref_all, d2V, ind_sam = generate_data()
-    sample_sam = sample_all[:, ind_sam, :]
-    x_ref_sam = x_ref_all[ind_sam]
-    dataset = SamDataset(sample_sam)
-    # dataset = MyDataset(torch.transpose(sample_sam, 1, 2))
-    score = ScoreNet(cfg.nd, hidden_depth=cfg.depth, embed_dim=cfg.width, use_bn=cfg.use_bn)
-    # score = Unet(cfg.d)
-
-    score.to(cfg.device)
 
     world_size = torch.cuda.device_count()
-    args_train = (world_size, score, dataset, cfg.lr_train, cfg.batch_size//world_size, cfg.n_epochs, cfg.print_interval)
+    args_train = (world_size, cfg.lr_train, cfg.batch_size//world_size, cfg.n_epochs, cfg.print_interval)
 
     if world_size == 1:
-        train_model(score, dataset, cfg.lr_train, cfg.batch_size, cfg.n_epochs, cfg.print_interval, cfg.device)
+        train_model(cfg)
     elif world_size >= 2:
         mp.spawn(train_model_ddp, args=args_train, nprocs=world_size)
 
-    torch.save(score.state_dict(), cfg.path_model_output)
+    # torch.save(score.state_dict(), cfg.path_model_output)
     shutil.copy(cfg.path_params, cfg.path_params_output)
 
     # =========================================== Sampling ===========================================
@@ -48,7 +39,6 @@ if __name__ == "__main__":
     sc_load.to(cfg.device)
     sc_load.load_state_dict(torch.load(cfg.path_model_output, weights_only=True))
 
-    shape = dataset.shape
     shape[0] = cfg.ntrajs_sample
     marginal_prob_std = lambda t : VESDE.marginal_prob_std(cfg.sigma_min, cfg.sigma_max, t)
     diffusion_coeff = lambda t : VESDE.diffusion_coeff(cfg.sigma_min, cfg.sigma_max, t)

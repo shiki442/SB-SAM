@@ -9,8 +9,8 @@ sys.path.append("..")
 sys.path.append("./project/songpengcheng/SAM_torch")
 # from SAM.nn import marginal_prob_std
 from SAM.sde_lib import VESDE
-from SAM.utils import SamDataset
-from SAM import cfg
+from SAM.datasets import get_dataloader
+from SAM import cfg, datasets, utils, losses, sde_lib
 from tqdm import tqdm
 
 ###====================================   Training   ==============================================================
@@ -37,7 +37,7 @@ def train_model_ddp(rank, world_size, score_model, dataset, lr=1e-3, batch_size=
         avg_loss = 0.
         for x in data_loader:
             x = x.to(rank).requires_grad_()
-            loss = loss_dsm(ddp_score, x, marginal_prob_std)
+            loss = losses.loss_dsm(ddp_score, x, marginal_prob_std)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -54,28 +54,41 @@ def train_model_ddp(rank, world_size, score_model, dataset, lr=1e-3, batch_size=
     return train_loss
 
 
-def train_model(score_model, dataset, lr=1e-3, batch_size=1000, n_epochs=5000, print_interval=100, device='cuda'):
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    optimizer = Adam(score_model.parameters(), lr=lr, weight_decay=0)
-    optimizer_lbfgs = LBFGS(score_model.parameters(), lr=0.1, max_iter=10, max_eval=None, tolerance_grad=1e-09, tolerance_change=1e-11)
+def train_model(cfg):
+    # Initialize model.
+    score_model = utils.create_model(cfg)
+    optimizer = losses.get_optimizer(cfg, score_model.parameters())
 
-    marginal_prob_std = lambda t : VESDE.marginal_prob_std(cfg.sigma_min, cfg.sigma_max, t)
+    # Build data loader
+    data_loader = datasets.get_dataloader(cfg)
+
+    # Setup SDEs
+    if cfg.training.sde == 'vpsde':
+        sde = sde_lib.VPSDE(beta_min=cfg.model.beta_min, beta_max=cfg.model.beta_max, N=cfg.model.num_scales)
+        sampling_eps = 1e-3
+    elif cfg.training.sde == 'subvpsde':
+        sde = sde_lib.subVPSDE(beta_min=cfg.model.beta_min, beta_max=cfg.model.beta_max, N=cfg.model.num_scales)
+        sampling_eps = 1e-3
+    elif cfg.training.sde == 'vesde':
+        sde = sde_lib.VESDE(sigma_min=cfg.model.sigma_min, sigma_max=cfg.model.sigma_max, N=cfg.model.num_scales)
+        sampling_eps = 1e-5
+    else:
+        raise NotImplementedError(f"SDE {cfg.training.sde} unknown.")
+
+    train_step_fn = losses.get_step_fn(sde, train=True, optimizer=optimizer)
 
     train_loss = []
     
     print(f"=========================== Starting Training ===========================")
-    tqdm_epoch = tqdm(range(n_epochs), desc="Training: Optimizer=Adam")
+    tqdm_epoch = tqdm(range(cfg.n_epochs), desc="Training: Optimizer=Adam")
     for epoch in tqdm_epoch:
-        for x in data_loader:
-            x = x.requires_grad_()
-            loss = loss_dsm(score_model, x, marginal_prob_std) 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
+        for batch in data_loader:
+            batch = batch.requires_grad_()
+            loss = train_step_fn(score_model, batch)
+
         # Print the averaged training loss so far.
         train_loss.append(loss.item())
-        if epoch%print_interval==0:
+        if epoch%cfg.print_interval==0:
             tqdm.write(f'epoch: {epoch}\t loss: {loss.item():.5f}')
 
     # tqdm_epoch = tqdm(range(50), desc="Training: Optimizer=LBFGS")
@@ -95,58 +108,9 @@ def train_model(score_model, dataset, lr=1e-3, batch_size=1000, n_epochs=5000, p
     #     if epoch%5==0:
     #         tqdm.write(f'epoch: {epoch}\t loss: {loss.item():.5f}')
 
-
     # optimizer = optimizer_lbfgs
     # loss_value = closure().item()
     # optimizer.step(closure)
     print(f"=========================== Finished Training ===========================\n")
     return train_loss
 
-
-
-###====================================   Loss Function   ==============================================================
-def DSM_loss(model, x, sigma=1.0e-1):
-    """The loss function for training score-based generative models.
-    Args:
-    model: A PyTorch model instance that represents a
-      time-dependent score-based model.
-    x: A mini-batch of training data.
-    sigma: Noise level for DSM.
-    """
-    perturbed_x = x + torch.randn_like(x) * sigma
-    z = - 1 / (sigma ** 2) * (perturbed_x - x)
-    scores = model(perturbed_x)
-    z = z.view(z.shape[0], -1)
-    scores = scores.view(scores.shape[0], -1)
-    loss = 1 / 2. * ((scores - z) ** 2).sum(dim=-1).mean(dim=0)
-    return loss
-
-
-def loss_dsm(model, x, marginal_prob_std, eps=1e-5):
-    """The loss function for training score-based generative models.
-
-    Args:
-    model: A PyTorch model instance that represents a 
-        time-dependent score-based model.
-    x: A mini-batch of training data.    
-    marginal_prob_std: A function that gives the standard deviation of 
-        the perturbation kernel.
-    eps: A tolerance value for numerical stability.
-    """
-    random_t = torch.rand(x.shape[0], device=x.device) * (1. - eps) + eps  
-    z = torch.randn_like(x)
-    std = marginal_prob_std(random_t)
-    # perturbed_x = x + z * std[:, None, None] # Unet
-    perturbed_x = x + z * std[:, None]
-    score = model(perturbed_x, random_t)
-    # loss = torch.mean(torch.sum((score * std[:, None, None] + z)**2, dim=1)) # Unet
-    loss = torch.mean(torch.sum((score * std[:, None] + z)**2, dim=1))
-    return loss
-
-
-def loss_ssm(model, samples, sigma=0.1):
-    perturbed_samples = samples + torch.randn_like(samples) * sigma
-    score = model(perturbed_samples)
-    div_score = model.div(perturbed_samples)
-    loss = torch.sum(score**2) + 2 * div_score
-    return torch.mean(loss)

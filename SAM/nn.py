@@ -3,6 +3,7 @@ from torch import nn
 # import numpy as np
 from SAM import cfg
 from SAM.sde_lib import VESDE
+from SAM.utils import register_model
 import math
 
 ###====================================   Network   ==============================================================
@@ -24,28 +25,28 @@ class GaussianFourierProjection(nn.Module):
         x_proj = x[:, None] * self.W[None, :] * 2 * torch.pi
         return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
-
+@register_model(name='ScoreNet')
 class ScoreNet(nn.Module):
     
-    def __init__(self, x_dim, hidden_depth=2, embed_dim=128, use_bn=True, sigma_min=0.1, sigma_max=1.0):
+    def __init__(self, cfg):
         super().__init__()
-        assert hidden_depth>=1, 'hidden_depth must be greater than 0!'
-        self.hidden_depth = hidden_depth
-        self.use_bn = use_bn
+        assert cfg.depth>=1, 'hidden_depth must be greater than 0!'
+        embed_dim = cfg.width
+        self.hidden_depth = cfg.depth
+        self.use_bn = cfg.use_bn
         # time embedding
         self.embed = nn.Sequential(GaussianFourierProjection(embed_dim=embed_dim), nn.Linear(embed_dim, embed_dim))
         # fc layers
-        self.input = nn.Linear(x_dim, embed_dim)
+        self.input = nn.Linear(cfg.nd, embed_dim)
         self.fc_all = nn.ModuleList([nn.Linear(embed_dim, embed_dim) for i in range(self.hidden_depth)])
-        self.output = nn.Linear(embed_dim, x_dim)
+        self.output = nn.Linear(embed_dim, cfg.nd)
         # batch normalization
         if self.use_bn:
             self.bn = nn.ModuleList([nn.BatchNorm1d(num_features=embed_dim) for i in range(self.hidden_depth)])
         # The swish activation function
         self.act = nn.SiLU()
-        self.sigma_min = cfg.sigma_min
-        self.sigma_max = cfg.sigma_max
-        self.marginal_prob_std = VESDE.marginal_prob_std
+        self.sigma_min = cfg.model.sigma_min
+        self.sigma_max = cfg.model.sigma_max
         self.apply(_init_params)
 
     def forward(self, x, t):
@@ -57,8 +58,6 @@ class ScoreNet(nn.Module):
                 h = self.bn[i](h)
         h = self.output(h)
 
-        # Normalize output
-        h = h / self.marginal_prob_std(self.sigma_min, self.sigma_max, t)[:, None]
         return h
 
 
@@ -70,7 +69,7 @@ class Dense(nn.Module):
   def forward(self, x):
     return self.dense(x)[..., None]
 
-
+@register_model(name='Unet')
 class Unet(nn.Module):
     def __init__(self, x_dim, channels=[32, 64, 128, 256], embed_dim=256):
         super().__init__()
@@ -188,9 +187,9 @@ class TimeIndependentScoreNet(nn.Module):
             grad_i = torch.autograd.grad(score_i, x, grad_outputs=torch.ones_like(score_i), retain_graph=True)[0]
             divergence += grad_i[:, i] 
         return divergence
-    
 
-def marginal_prob_std(t:torch.Tensor, sigma=cfg.sigma_max):
+
+def marginal_prob_std(t:torch.Tensor, sigma=cfg.model.sigma_max):
     """Compute the mean and standard deviation of $p_{0t}(x(t) | x(0))$.
     Args:    
         t: A vector of time steps.
@@ -202,7 +201,7 @@ def marginal_prob_std(t:torch.Tensor, sigma=cfg.sigma_max):
     return torch.sqrt((sigma**(2 * t) - 1.) / 2. / math.log(sigma))
 
 
-def diffusion_coeff(t, sigma=cfg.sigma_max):
+def diffusion_coeff(t, sigma=cfg.model.sigma_max):
     """Compute the diffusion coefficient of our SDE.
     Args:
         t: A vector of time steps.

@@ -6,7 +6,7 @@ sys.path.append('../SAM')
 
 from SAM.utils import stress_LMC, stress_MD, force, potential
 from SAM.utils import set_seed
-from SAM.data import generate_data, generate_grid, index_sam, nearest_particles, D2Virial, generate_gauss_data, process_data, eq_D2Virial
+from SAM.datasets import generate_data, generate_grid, index_sam, nearest_particles, D2Virial, generate_gauss_data, process_data, eq_D2Virial
 
 from matplotlib import pyplot as plt
 

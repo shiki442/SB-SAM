@@ -136,3 +136,11 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# log files
+*.out
+*.err
+
+# pycache
+SAM/__pycache__/
+*.pyc
