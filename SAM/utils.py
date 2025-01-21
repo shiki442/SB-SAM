@@ -11,7 +11,7 @@ import random
 sys.path.append("..")
 sys.path.append("./project/songpengcheng/SAM_torch")
 
-from SAM import cfg, sde_lib
+from SAM import sde_lib
 
 ###====================================   Set Seed   ==============================================================
 def set_seed(seed):
@@ -71,13 +71,13 @@ def potential(x_all, mean, d2V):
         # V += torch.mean(torch.pow(u, 4))
     return V
 
-def force(x_all, mean, d2V):
+def force(cfg, x_all, mean, d2V):
     f = torch.zeros_like(x_all)
     for i in range(cfg.d):
         f[:,:,i] = 2*(x_all[:,:,i] - mean[:, i]) @ d2V[i]
     return f
 
-def stress_LMC(sc, x, x_grid):
+def stress_LMC(cfg, sc, x, x_grid):
     x = x.to(cfg.device)
     x_flatten = torch.flatten(x, start_dim=-2)
     x_grid = x_grid.to(cfg.device)

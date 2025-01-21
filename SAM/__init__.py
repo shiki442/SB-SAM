@@ -1,7 +1,7 @@
 from ml_collections import ConfigDict
 from datetime import datetime
 import torch
-import argparse, sys, shutil, math
+import argparse, sys, shutil, math, os
 import yaml
 
 parser = argparse.ArgumentParser(description="Basic paser")
@@ -16,11 +16,7 @@ with open(config_file, 'r') as file:
 
 cfg = ConfigDict(config)
 
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
 SEED = 1213
-
-cfg.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 cfg.n_all = cfg.n_all_per_dim ** cfg.d
 cfg.grid_step = (cfg.max_grid-cfg.min_grid) / (cfg.n_all_per_dim-1)
@@ -32,8 +28,15 @@ cfg.nd = cfg.d * cfg.n_sam
 
 cfg.k0 = cfg.k0 * (6.0/cfg.grid_step)**2
 
-cfg.path_output = './output/'
-cfg.path_model_output = f"{cfg.path_output}models/sc_{timestamp}_N{cfg.n_all}_n{cfg.n_sam}_d{cfg.d}.pth"
-cfg.path_figure_output = f"{cfg.path_output}figures/fig_{timestamp}_N{cfg.n_all}_n{cfg.n_sam}_d{cfg.d}/"
-cfg.path_params = config_file
-cfg.path_params_output = f"{cfg.path_output}params/params_{timestamp}_N{cfg.n_all}_n{cfg.n_sam}_d{cfg.d}.yml"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+cfg.path_output = f'./output/{timestamp}_N{cfg.n_all}_n{cfg.n_sam}_d{cfg.d}/'
+cfg.path_checkpoints = os.path.join(cfg.path_output, "checkpoints")
+cfg.path_params = os.path.join(cfg.path_output, "params")
+
+os.makedirs(cfg.path_params, exist_ok=True)
+with open('config.yml', 'w') as f:
+    yaml.dump(cfg.to_dict(), f, default_flow_style=False, allow_unicode=True)
+
+cfg.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+cfg.world_size = torch.cuda.device_count()

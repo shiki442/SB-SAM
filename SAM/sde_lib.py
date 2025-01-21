@@ -236,8 +236,8 @@ class VESDE(SDE):
     mean = x
     return mean, std
 
-  def prior_sampling(self, shape):
-    return torch.randn(*shape) * self.sigma_max
+  def prior_sampling(self, shape, device):
+    return torch.randn(*shape, device=device) * self.sigma_max
 
   def prior_logp(self, z):
     shape = z.shape

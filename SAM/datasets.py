@@ -175,7 +175,7 @@ def get_data_params(cfg):
     ind_sam = index_sam(x_ref_all)
     indij_near = nearest_particles(indij_ref, cfg.d_max)
     d2V = D2Virial(indij_ref, indij_near, cfg.n_all_per_dim)
-    return x_ref_all, d2V, ind_sam
+    return x_ref_all.to(cfg.device), d2V.to(cfg.device), ind_sam
 
 def generate_data(cfg):
     """Generate a dataset from the example problem."""
