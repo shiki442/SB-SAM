@@ -104,7 +104,7 @@ class Unet(nn.Module):
 
         # The swish activation function
         self.act = nn.SiLU()
-        self.marginal_prob_std = marginal_prob_std
+        # self.marginal_prob_std = marginal_prob_std
         # self.apply(_init_params)
 
     def forward(self, x, t): 
@@ -147,7 +147,7 @@ class Unet(nn.Module):
         h = self.tconv1(torch.cat([h, h1], dim=1))
 
         # Normalize output
-        h = h / self.marginal_prob_std(t)[:, None, None]
+        # h = h / self.marginal_prob_std(t)[:, None, None]
         return h
 
 
@@ -187,26 +187,3 @@ class TimeIndependentScoreNet(nn.Module):
             grad_i = torch.autograd.grad(score_i, x, grad_outputs=torch.ones_like(score_i), retain_graph=True)[0]
             divergence += grad_i[:, i] 
         return divergence
-
-
-def marginal_prob_std(t:torch.Tensor, sigma=cfg.model.sigma_max):
-    """Compute the mean and standard deviation of $p_{0t}(x(t) | x(0))$.
-    Args:    
-        t: A vector of time steps.
-        sigma: The $\sigma$ in our SDE.
-    Returns:
-        The standard deviation.
-    """    
-    t = t.clone().detach()
-    return torch.sqrt((sigma**(2 * t) - 1.) / 2. / math.log(sigma))
-
-
-def diffusion_coeff(t, sigma=cfg.model.sigma_max):
-    """Compute the diffusion coefficient of our SDE.
-    Args:
-        t: A vector of time steps.
-        sigma: The $\sigma$ in our SDE.
-    Returns:
-        The vector of diffusion coefficients.
-    """
-    return sigma**t

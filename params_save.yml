@@ -33,8 +33,8 @@ grad_clip: -1
 
 lr_sde: 1.0e-4
 batch_size: 2048
-n_epochs: 5000
-n_steps: 1000
+n_epochs: 10
+n_steps: 50
 
 # physics
 d_max: 5
@@ -43,13 +43,16 @@ T: 1
 
 # verbose
 print_interval: 20
+save_interval: 100
 
 model:
   name: 'ScoreNet'
   sigma_min: 0.01
   sigma_max: 0.2
-  num_scales: 1000
+  num_scales: 50
 
 training:
   sde: 'vesde'
 
+sampler:
+  method: 'em'

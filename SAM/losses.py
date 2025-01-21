@@ -50,27 +50,6 @@ def DSM_loss(model, x, sigma=1.0e-1):
     return loss
 
 
-def loss_dsm(model, x, marginal_prob_std, eps=1e-5):
-    """The loss function for training score-based generative models.
-
-    Args:
-    model: A PyTorch model instance that represents a 
-        time-dependent score-based model.
-    x: A mini-batch of training data.    
-    marginal_prob_std: A function that gives the standard deviation of 
-        the perturbation kernel.
-    eps: A tolerance value for numerical stability.
-    """
-    random_t = torch.rand(x.shape[0], device=x.device) * (1. - eps) + eps  
-    z = torch.randn_like(x)
-    std = marginal_prob_std(random_t)
-    # perturbed_x = x + z * std[:, None, None] # Unet
-    perturbed_x = x + z * std[:, None]
-    score = model(perturbed_x, random_t)
-    # loss = torch.mean(torch.sum((score * std[:, None, None] + z)**2, dim=1)) # Unet
-    loss = torch.mean(torch.sum((score * std[:, None] + z)**2, dim=1))
-    return loss
-
 
 def loss_ssm(model, samples, sigma=0.1):
     perturbed_samples = samples + torch.randn_like(samples) * sigma
@@ -102,11 +81,13 @@ def get_step_fn(sde, train=True, optimizer=None):
     else:
         pass
     
-    def step_fn(model, batch):
+    def step_fn(state, batch):
+        model = state['model']
         optimizer.zero_grad()
         loss = loss_fn(model, batch)
         loss.backward()
         optimizer.step()
+        state['step'] += 1
         return loss
 
     return step_fn
