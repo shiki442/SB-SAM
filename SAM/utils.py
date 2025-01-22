@@ -1,24 +1,14 @@
 # Practical tools used by main.py
 
 import torch
-from torch.utils.data import Dataset
+import sys, os
 
-from tqdm import tqdm
-import sys, time
-import math
-import random
+from SAM.datasets import process_data
+import matplotlib.pyplot as plt
 
 sys.path.append("..")
 sys.path.append("./project/songpengcheng/SAM_torch")
 
-from SAM import sde_lib
-
-###====================================   Set Seed   ==============================================================
-def set_seed(seed):
-    random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 _MODELS = {}
 
@@ -61,21 +51,68 @@ def get_score_fn(sde, model, train):
     
     return score_fn
 
-###====================================   Stress   ==============================================================
-def potential(x_all, mean, d2V):
-    u = x_all - mean
-    V = 0.
-    for i in range(1):
-        f = u[:,:,i] @ d2V[i]
-        V += 0.5 * torch.mean(f * u[:,:,i])
-        # V += torch.mean(torch.pow(u, 4))
-    return V
+###====================================   evaluate   ==============================================================
+def get_evaluate_fn(cfg, dataset, state):
+    mean_true = dataset.mean
+    std_true = dataset.std
+    x_true = dataset.x_sam
+    potential_fn = get_potential_fn(cfg)
 
-def force(cfg, x_all, mean, d2V):
-    f = torch.zeros_like(x_all)
-    for i in range(cfg.d):
-        f[:,:,i] = 2*(x_all[:,:,i] - mean[:, i]) @ d2V[i]
-    return f
+    def evaluate_fn(x_pred):
+       x_pred = process_data(x_pred, mean_true, cfg)
+       mean_pred = torch.mean(x_pred, axis=0)
+       std_pred = torch.std(x_pred, axis=0)
+       err_mean = torch.mean(torch.abs(mean_pred - mean_true))
+       err_std = torch.mean(torch.abs(std_pred - std_true))
+       print(f"Mean Error: {err_mean:.5f}, Std Error: {err_std:.5f}")
+
+       V_true = potential_fn(x_true, mean_true)
+       V_pred = potential_fn(x_pred, mean_pred)
+       err_V = torch.mean(torch.abs(V_pred - V_true))
+       print(f"Potential Error: {err_V:.5f}")
+
+       eval = dict(x_pred=x_pred, V_pred=V_pred, V_true=V_true)
+       torch.save(eval, os.path.join(cfg.path.eval, 'eval.pth'))
+
+       create_and_save_hist(x_pred[:,0,0], x_true[:,0,0], cfg.path.eval)
+       return err_V
+    
+    return evaluate_fn
+
+###====================================   Stress   ==============================================================
+def get_potential_fn(cfg):
+
+  def potential(x, mean):
+      n = x.shape[1]
+      Fmat = get_force_mat(cfg, n)
+      u = x - mean
+      V = 0.
+      for i in range(cfg.data.d):
+          f = u[:,:,i] @ Fmat[i]
+          V += 0.5 * torch.mean(f * u[:,:,i])
+      return V
+    
+  return potential
+
+def get_force_mat(cfg, n):
+    Fmat = torch.zeros((cfg.data.d, n, n))
+    diag_vals = [10., -9., 8., -7., 6., -5.]
+    # 构造三对角矩阵
+    for i in range(len(diag_vals)):
+        if i <= n:
+            diag = diag_vals[i] * torch.ones(n - i)
+            Fmat[0] = Fmat[0] + torch.diag(diag, diagonal=i) + torch.diag(diag, diagonal=-i)
+    return Fmat.to(cfg.device)
+
+def create_and_save_hist(x_pred, x_true, path):
+    fig, axes = plt.subplots(nrows=1, ncols=2, sharex=True, sharey=True, figsize=(10, 5))
+    axes[0].hist(x_pred.cpu().numpy(), bins=50, edgecolor='black', density=True)
+    axes[0].set_title(f'pred data: x')
+    axes[1].hist(x_true.cpu().numpy(), bins=50, edgecolor='black', density=True)
+    axes[1].set_title(f'true data: x')
+    path = os.path.join(path,'hist.png')
+    plt.savefig(path)
+    plt.close()
 
 def stress_LMC(cfg, sc, x, x_grid):
     x = x.to(cfg.device)

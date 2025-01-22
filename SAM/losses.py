@@ -2,25 +2,25 @@ import torch
 import numpy as np
 from SAM import utils
 
-def get_optimizer(config, params):
+def get_optimizer(cfg, params):
     """Returns a flax optimizer object based on `config`."""
-    if config.optimizer == 'Adam':
-        optimizer = torch.optim.Adam(params, lr=config.lr_train, betas=(config.beta1, 0.999), eps=config.eps,
-                            weight_decay=config.weight_decay)
-    elif config.optim.optimizer == 'LBFGS':
+    if cfg.optim.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(params, lr=cfg.optim.lr, betas=(cfg.optim.beta1, 0.999), eps=cfg.optim.eps,
+                            weight_decay=cfg.optim.weight_decay)
+    elif cfg.optim.optimizer == 'LBFGS':
         optimizer = torch.optim.LBFGS(params, lr=0.1, max_iter=10, max_eval=None, tolerance_grad=1e-09, tolerance_change=1e-11)
     else:
         raise NotImplementedError(
-        f'Optimizer {config.optim.optimizer} not supported yet!')
+        f'Optimizer {cfg.optim.optimizer} not supported yet!')
 
     return optimizer
 
-def optimization_manager(config):
+def optimization_manager(cfg):
     """Returns an optimize_fn based on `config`."""
 
-    def optimize_fn(optimizer, params, step, lr=config.optim.lr_train,
-                    warmup=config.optim.warmup,
-                    grad_clip=config.optim.grad_clip):
+    def optimize_fn(optimizer, params, step, lr=cfg.optim.lr_train,
+                    warmup=cfg.optim.warmup,
+                    grad_clip=cfg.optim.grad_clip):
         """Optimizes with warmup and gradient clipping (disabled if negative)."""
         if warmup > 0:
             for g in optimizer.param_groups:

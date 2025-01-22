@@ -1,10 +1,6 @@
 import torch
 from torch import nn
-# import numpy as np
-from SAM import cfg
-from SAM.sde_lib import VESDE
 from SAM.utils import register_model
-import math
 
 ###====================================   Network   ==============================================================
 def _init_params(layer):
@@ -30,16 +26,16 @@ class ScoreNet(nn.Module):
     
     def __init__(self, cfg):
         super().__init__()
-        assert cfg.depth>=1, 'hidden_depth must be greater than 0!'
-        embed_dim = cfg.width
-        self.hidden_depth = cfg.depth
-        self.use_bn = cfg.use_bn
+        assert cfg.net.depth>=1, 'hidden_depth must be greater than 0!'
+        embed_dim = cfg.net.width
+        self.hidden_depth = cfg.net.depth
+        self.use_bn = cfg.net.use_bn
         # time embedding
         self.embed = nn.Sequential(GaussianFourierProjection(embed_dim=embed_dim), nn.Linear(embed_dim, embed_dim))
         # fc layers
-        self.input = nn.Linear(cfg.nd, embed_dim)
+        self.input = nn.Linear(cfg.data.nd, embed_dim)
         self.fc_all = nn.ModuleList([nn.Linear(embed_dim, embed_dim) for i in range(self.hidden_depth)])
-        self.output = nn.Linear(embed_dim, cfg.nd)
+        self.output = nn.Linear(embed_dim, cfg.data.nd)
         # batch normalization
         if self.use_bn:
             self.bn = nn.ModuleList([nn.BatchNorm1d(num_features=embed_dim) for i in range(self.hidden_depth)])
@@ -153,7 +149,7 @@ class Unet(nn.Module):
 
 class TimeIndependentScoreNet(nn.Module):
     
-    def __init__(self, x_dim , hidden_depth=2, embed_dim=128, use_bn=True):
+    def __init__(self, x_dim , hidden_depth=2, embed_dim=128, use_bn=True, cfg=None):
         assert hidden_depth>=1, 'hidden_depth must be greater than 0!'    
         super().__init__()
         self.hidden_depth = hidden_depth
@@ -166,7 +162,7 @@ class TimeIndependentScoreNet(nn.Module):
             self.bn = nn.ModuleList([nn.BatchNorm1d(num_features=embed_dim) for i in range(self.hidden_depth)])
         # The swish activation function
         self.act = nn.SiLU()
-        
+        self.cfg = cfg
         self.apply(_init_params)
 
     def forward(self, x):
@@ -180,7 +176,7 @@ class TimeIndependentScoreNet(nn.Module):
         return h
     
     def div(self, x):
-        divergence = torch.zeros(x.shape[0], device=cfg.device)
+        divergence = torch.zeros(x.shape[0], device=self.cfg.device)
         score = self(x)
         for i in range(score.shape[1]):
             score_i = score[:, i]

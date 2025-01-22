@@ -16,6 +16,6 @@ echo This job has allocated $SLURM_JOB_CPUS_PER_NODE cpu cores.
 echo ---------------------------------------------
 echo Time is `date`
 
-/project/songpengcheng/miniconda3/envs/torch/bin/python -u main.py --config=params4.yml
+/project/songpengcheng/miniconda3/envs/torch/bin/python -u main.py --config=./config/params4.yml
 echo End at `date`
 

@@ -17,6 +17,6 @@ echo ---------------------------------------------
 echo configuration file: params3
 echo Time is `date`
 
-/project/songpengcheng/miniconda3/envs/torch/bin/python -u main.py --config=params3.yml
+/project/songpengcheng/miniconda3/envs/torch/bin/python -u main.py --config=./config/params3.yml
 echo End at `date`
 

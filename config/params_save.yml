@@ -1,0 +1,59 @@
+net:
+  depth: 3
+  width: 512
+  use_bn: False
+
+data:
+  d: 3
+  n_all_per_dim: 5
+  n_sam_per_dim: 5
+  n_all:
+  n_sam:
+  nd: 
+  grid_step: 1.0
+  min_grid: 
+  max_grid: 
+  min_sam: 
+  max_sam: 
+
+optim:
+  optimizer: 'Adam'
+  lr: 1.0e-3
+  beta1: 0.9
+  eps: 1.0e-8
+  weight_decay: 0
+  warmup: 0
+  grad_clip: -1
+
+model:
+  name: 'ScoreNet'
+  sigma_min: 0.01
+  sigma_max: 0.2
+  beta_min: 0.1
+  beta_max: 1.0
+  T: 1.0
+  num_scales: 50
+  d_max: 5
+  k0: 3.6
+  temperature: 1.0
+
+training:
+  sde: 'vesde'
+  ntrajs: 50000
+  batch_size: 2048
+  n_iter: 10
+
+sampler:
+  method: 'em'
+  ntrajs: 200
+  snr: 0.17
+
+log:
+  print_interval: 20
+  save_interval: 100
+
+path:
+  output:
+  checkpoints:
+  eval:
+  params:

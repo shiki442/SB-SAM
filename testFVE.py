@@ -25,7 +25,7 @@ def get_mean_cov(n, mu=0., sigma=1., random=False):
     mean = mu*torch.ones(n)  # Mean vector
     if random == True:
         mean += torch.rand(n)
-    cov = torch.zeros((cfg.d, n, n))
+    cov = torch.zeros((cfg.data.d, n, n))
     diag_vals = [10., -9., 8., -7., 6., -5.]
     # 构造三对角矩阵
     for i in range(len(diag_vals)):
@@ -64,7 +64,7 @@ for j in range(len(k_nearest)):
         indij_ref = generate_grid(d, n, mode='index')
         indij_near = nearest_particles(indij_ref, m, d)
         d2V = D2Virial(indij_ref, indij_near, n, d)
-        sample_all = generate_gauss_data(x_ref_all, d2V, d, 1.0)
+        sample_all = generate_gauss_data(x_ref_all, d2V, cfg)
         mean, cov = get_mean_cov(n)
         V_list[j][i] = potential(sample_all, x_ref_all, cov)
 
@@ -77,7 +77,7 @@ for j in range(len(k_nearest)):
         x_ref_sam = x_ref_all[ind_sam]
         eq_d2V = eq_D2Virial(d2V, ind_sam, d)
         mean, cov = get_mean_cov(len(ind_sam))
-        sample_eq_sam = generate_gauss_data(x_ref_sam, eq_d2V, d, 1.0)
+        sample_eq_sam = generate_gauss_data(x_ref_sam, eq_d2V, cfg)
         # Deq = torch.linalg.eig(eq_d2V[0])
         # print(Deq)
         

@@ -11,7 +11,7 @@
             "program": "main.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["--config=params_save.yml"]
+            "args": ["--config=./config/params_save.yml"]
         },
         {
             "name": "testFVE",
@@ -20,7 +20,7 @@
             "program": "testFVE.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["--config=params3.yml"]
+            "args": ["--config=./config/params3.yml"]
         },
         {
             "name": "visual",
