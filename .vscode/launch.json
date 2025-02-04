@@ -11,25 +11,11 @@
             "program": "main.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "args": ["--config=./config/params_save.yml"]
-        },
-        {
-            "name": "testFVE",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "testFVE.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
             "args": ["--config=./config/params3.yml"]
-        },
-        {
-            "name": "visual",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "./notebooks/visual.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "args": ["--config=./output/params/params_20250109_114640_N125_n125.yml"]
         }
+    ],
+    "python.formatting.provider": "autopep8",
+    "python.formatting.autopep8Args": [
+        "--max-line-length=240"
     ]
 }

@@ -2,18 +2,21 @@ import torch
 import numpy as np
 from SAM import utils
 
+
 def get_optimizer(cfg, params):
     """Returns a flax optimizer object based on `config`."""
     if cfg.optim.optimizer == 'Adam':
         optimizer = torch.optim.Adam(params, lr=cfg.optim.lr, betas=(cfg.optim.beta1, 0.999), eps=cfg.optim.eps,
-                            weight_decay=cfg.optim.weight_decay)
+                                     weight_decay=cfg.optim.weight_decay)
     elif cfg.optim.optimizer == 'LBFGS':
-        optimizer = torch.optim.LBFGS(params, lr=0.1, max_iter=10, max_eval=None, tolerance_grad=1e-09, tolerance_change=1e-11)
+        optimizer = torch.optim.LBFGS(
+            params, lr=0.1, max_iter=10, max_eval=None, tolerance_grad=1e-09, tolerance_change=1e-11)
     else:
         raise NotImplementedError(
-        f'Optimizer {cfg.optim.optimizer} not supported yet!')
+            f'Optimizer {cfg.optim.optimizer} not supported yet!')
 
     return optimizer
+
 
 def optimization_manager(cfg):
     """Returns an optimize_fn based on `config`."""
@@ -32,7 +35,7 @@ def optimization_manager(cfg):
     return optimize_fn
 
 
-###====================================   Loss Function   ==============================================================
+# ====================================   Loss Function   ==============================================================
 def DSM_loss(model, x, sigma=1.0e-1):
     """The loss function for training score-based generative models.
     Args:
@@ -50,7 +53,6 @@ def DSM_loss(model, x, sigma=1.0e-1):
     return loss
 
 
-
 def loss_ssm(model, samples, sigma=0.1):
     perturbed_samples = samples + torch.randn_like(samples) * sigma
     score = model(perturbed_samples)
@@ -58,19 +60,21 @@ def loss_ssm(model, samples, sigma=0.1):
     loss = torch.sum(score**2) + 2 * div_score
     return torch.mean(loss)
 
+
 def get_sde_loss_fn(sde, train, eps=1e-5):
 
     def loss_fn(model, batch):
         """The loss function for training score-based generative models."""
         model_fn = utils.get_score_fn(sde, model, train)
-        random_t = torch.rand(batch.shape[0], device=batch.device) * (sde.T - eps) + eps  
+        random_t = torch.rand(
+            batch.shape[0], device=batch.device) * (sde.T - eps) + eps
         z = torch.randn_like(batch)
         mean, std = sde.marginal_prob(batch, random_t)
         perturbed_x = mean + z * std[:, None]
         score = model_fn(perturbed_x, random_t)
         losses = torch.square(score * std[:, None] + z)
         return torch.mean(losses)
-    
+
     return loss_fn
 
 
@@ -80,7 +84,7 @@ def get_step_fn(sde, train=True, optimizer=None):
         loss_fn = get_sde_loss_fn(sde, train)
     else:
         pass
-    
+
     def step_fn(state, batch):
         model = state['model']
         optimizer.zero_grad()

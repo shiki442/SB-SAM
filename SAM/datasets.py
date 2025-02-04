@@ -3,7 +3,8 @@ from torch.utils.data import Dataset
 
 import time
 import math
-from config.config import cfg
+# from config.config import cfg
+
 
 class SamDataset(Dataset):
     def __init__(self, x_all, ind_sam=None):
@@ -22,6 +23,20 @@ class SamDataset(Dataset):
         return torch.flatten(self.x_sam[idx], start_dim=-2)
 
 
+class PdcDataset(Dataset):
+    def __init__(self, x_all):
+        super().__init__()
+        self.x_all = x_all
+        self.mean = torch.mean(self.x_all, axis=0)
+        self.std = torch.std(self.x_all, axis=0)
+
+    def __len__(self):
+        return self.x_all.shape[0]
+
+    def __getitem__(self, idx):
+        return torch.flatten(self.x_all[idx], start_dim=-2)
+
+
 class MyDataset(Dataset):
     def __init__(self, x_train):
         super().__init__()
@@ -34,11 +49,20 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         return self.x_train[idx]
 
-###====================================   Dataset   ==============================================================
+# ====================================   Dataset   ==============================================================
+
+
 def get_dataset(cfg):
     sample_all, ind_sam = generate_data(cfg)
     dataset = SamDataset(sample_all, ind_sam)
     return dataset
+
+
+def get_pdc_dataset(cfg):
+    sample_all = generate_pdc_data(cfg)
+    dataset = PdcDataset(sample_all)
+    return dataset
+
 
 def generate_gauss_data(mean, d2V, cfg):
     d = cfg.data.d
@@ -48,8 +72,8 @@ def generate_gauss_data(mean, d2V, cfg):
     cov = torch.empty_like(d2V)
     for i in range(d):
         cov[i] = T/2*torch.linalg.inv(d2V[i])
-        sampler  = torch.distributions.MultivariateNormal(mean[:, i], cov[i])
-        x_all[:,:,i] = sampler.sample((cfg.training.ntrajs, ))
+        sampler = torch.distributions.MultivariateNormal(mean[:, i], cov[i])
+        x_all[:, :, i] = sampler.sample((cfg.training.ntrajs, ))
     return x_all
 
 
@@ -72,7 +96,8 @@ def generate_grid(dim, n, min_val=-0.0, max_val=1.0, mode='pos'):
 
 
 def index_sam(ref_struc, min_sam, max_sam):
-    mask = (ref_struc >= min_sam) & (ref_struc <= max_sam)
+    eps = 1.0e-6
+    mask = (ref_struc >= min_sam-eps) & (ref_struc <= max_sam+eps)
     mask = mask.all(dim=1)
     index_sam = torch.nonzero(mask).squeeze()
     return index_sam
@@ -85,7 +110,9 @@ def nearest_particles(r, dist_max, d):
     return r[ind]
 
 
-def D2Virial(indij_ref, indij_near, n, d):
+def D2Virial(indij_ref, indij_near, cfg):
+    n = cfg.data.n_all_per_dim
+    d = cfg.data.d
     n_all = n ** d
     d2V = torch.zeros([d, n_all, n_all])
     ind_x = torch.arange(0, n_all)
@@ -101,7 +128,7 @@ def D2Virial(indij_ref, indij_near, n, d):
             indij_y = (indij_y + n) % n
             ind_y = torch.zeros_like(ind_x)
             for k in range(indij_y.shape[1]):
-                ind_y += n**k * indij_y[:,-(k+1)]
+                ind_y += n**k * indij_y[:, -(k+1)]
             d2V_ij[ind_x, ind_x] += Hooke_coeff_fn(r)
             d2V_ij[ind_x, ind_y] -= Hooke_coeff_fn(r)
         # symmetrize
@@ -118,12 +145,13 @@ def eq_D2Virial(d2V, ind_sam, d):
     ind_other = all_ind[mask]
     eq_d2V = torch.zeros([d2V.shape[0], n, n])
     for i in range(d):
-        D11 = d2V[i][ind_sam][:,ind_sam]
-        D12 = d2V[i][ind_sam][:,ind_other]
-        D22 = d2V[i][ind_other][:,ind_other]
+        D11 = d2V[i][ind_sam][:, ind_sam]
+        D12 = d2V[i][ind_sam][:, ind_other]
+        D22 = d2V[i][ind_other][:, ind_other]
         inv_D22 = torch.linalg.inv(D22)
         eq_d2V[i] = D11 - D12 @ inv_D22 @ D12.T
     return eq_d2V
+
 
 def N(r: torch.Tensor):
     '''The number of particles with a relative position of |r|.'''
@@ -146,6 +174,7 @@ def get_Hooke_coeff_fn(cfg):
         return k0 / dist
     return Hooke_coeff
 
+
 def process_data(x_pred, x_ref_sam, cfg):
     if x_pred.dim() == 2:
         mu = torch.flatten(x_ref_sam)
@@ -154,7 +183,8 @@ def process_data(x_pred, x_ref_sam, cfg):
     is_outliers = (torch.abs(x_pred-mu) >= cfg.data.grid_step)
     # tolerance = max(cfg.data.max_grid, -cfg.data.min_grid) + cfg.data.grid_step
     # is_outliers = (torch.abs(x_pred) >= tolerance)
-    outliers = torch.where(torch.isnan(x_pred) | torch.isinf(x_pred) | is_outliers)
+    outliers = torch.where(torch.isnan(
+        x_pred) | torch.isinf(x_pred) | is_outliers)
     rows_to_delete = torch.unique(outliers[0])
     n_pred = cfg.sampler.ntrajs - len(rows_to_delete)
     mask = torch.ones(x_pred.size(0), dtype=torch.bool)
@@ -163,50 +193,59 @@ def process_data(x_pred, x_ref_sam, cfg):
     x_pred_p = x_pred.view(n_pred, cfg.data.n_sam, cfg.data.d)
     return x_pred_p
 
+
 def get_data_params(cfg):
-    x_ref_all = generate_grid(cfg.data.d, cfg.data.n_all_per_dim, cfg.data.min_grid, cfg.data.max_grid)
+    x_ref_all = generate_grid(
+        cfg.data.d, cfg.data.n_all_per_dim, cfg.data.min_grid, cfg.data.max_grid)
     indij_ref = generate_grid(cfg.data.d, cfg.data.n_all_per_dim, mode='index')
     ind_sam = index_sam(x_ref_all, cfg.data.min_sam, cfg.data.max_sam)
-    indij_near = nearest_particles(indij_ref, cfg.model.d_max, cfg.data.d)
-    d2V = D2Virial(indij_ref, indij_near, cfg.data.n_all_per_dim, cfg.data.d)
+    indij_near = nearest_particles(indij_ref, cfg.model.k_near, cfg.data.d)
+    d2V = D2Virial(indij_ref, indij_near, cfg)
     return x_ref_all.to(cfg.device), d2V.to(cfg.device), ind_sam
+
+
+def get_eq_data_params(cfg):
+    x_ref_all, d2V, ind_sam = get_data_params(cfg)
+    x_ref_sam = x_ref_all[ind_sam]
+    d2V_eq = eq_D2Virial(d2V, ind_sam, cfg.data.d)
+    return x_ref_sam, d2V_eq.to(cfg.device)
+
 
 def generate_data(cfg):
     """Generate a dataset from the example problem."""
-    print(f"=========================== Starting data generation ===========================")
-    start_time = time.time()
+    if cfg.log.verbose:
+        print(f"=========================== Starting data generation ===========================")
+        start_time = time.time()
 
     x_ref_all, d2V, ind_sam = get_data_params(cfg)
     sample_all = generate_gauss_data(x_ref_all, d2V, cfg)
-
-    end_time = time.time()
-    print(f"Dataset Size: {sample_all.shape}")
-    print(f"Dim: {cfg.data.d}")
-    print(f"Num of Total Particles: {cfg.data.n_all}")
-    print(f"Num of SB-SAM Particles: {cfg.data.n_sam}")
-    print(f"Total time = {(end_time-start_time)/60.:.5f}m")
-    print(f"=========================== Finished data generation  ===========================\n")
+    if cfg.log.verbose:
+        end_time = time.time()
+        print(f"Dataset Size: {sample_all.shape}")
+        print(f"Dim: {cfg.data.d}")
+        print(f"Num of Total Particles: {cfg.data.n_all}")
+        print(f"Num of SB-SAM Particles: {cfg.data.n_sam}")
+        print(f"Total time = {(end_time-start_time)/60.:.5f}m")
+        print(f"=========================== Finished data generation  ===========================\n")
 
     return sample_all.to(cfg.device), ind_sam
 
 
-def generate_PDC_data(cfg):
+def generate_pdc_data(cfg):
     """Generate a dataset from the example problem."""
-    print(f"=========================== Starting data generation ===========================")
-    start_time = time.time()
+    if cfg.log.verbose:
+        print(f"=========================== Starting data generation ===========================")
+        start_time = time.time()
 
-    x_ref_sam = generate_grid(cfg.data.d, cfg.data.n_sam_per_dim, cfg.data.min_sam, cfg.data.max_sam)
-    indij_ref = generate_grid(cfg.data.d, cfg.data.n_sam_per_dim, mode='index')
-    indij_near = nearest_particles(indij_ref, cfg.model.d_max, cfg.data.d)
-    d2V_PDC = D2Virial(indij_ref, indij_near, cfg.data.n_sam_per_dim, cfg.data.d)
-    sample_sam = generate_gauss_data(x_ref_sam, d2V_PDC, cfg)
+    x_ref_all, d2V_eq = get_eq_data_params(cfg)
+    sample_all = generate_gauss_data(x_ref_all, d2V_eq, cfg)
 
-    end_time = time.time()
-    print(f"Dataset Size: {sample_sam.shape}")
-    print(f"Dim: {cfg.data.d}")
-    print(f"Num of Total Particles: {cfg.data.n_all}")
-    print(f"Num of SB-SAM Particles: {cfg.data.n_sam}")
-    print(f"Total time = {(end_time-start_time)/60.:.5f}m")
-    print(f"=========================== Finished data generation  ===========================\n")
+    if cfg.log.verbose:
+        end_time = time.time()
+        print(f"Dataset Size: {sample_all.shape}")
+        print(f"Dim: {cfg.data.d}")
+        print(f"Num of Total Particles: {cfg.data.n_all}")
+        print(f"Total time = {(end_time-start_time)/60.:.5f}m")
+        print(f"=========================== Finished data generation  ===========================\n")
 
-    return sample_sam, x_ref_sam, d2V_PDC
+    return sample_all.to(cfg.device)

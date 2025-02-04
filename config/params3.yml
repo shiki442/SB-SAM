@@ -1,39 +1,61 @@
-# no changes
-# network
-depth: 3
-width: 512
-use_bn: False
+net:
+  depth: 3
+  width: 256
+  use_bn: False
 
-# 
-sigma_DSM: 1
-sigma_min: 0.01
-sigma_max: 0.2
-eps: 0.01
+data:
+  cfg_flag: 1
+  d: 1
+  n_all_per_dim: 50
+  n_sam_per_dim: 5
+  n_all:
+  n_sam:
+  nd: 
+  grid_step: 0.1
+  min_grid: 
+  max_grid: 
+  min_sam: 
+  max_sam: 
 
-# data
-d: 3
-n_all_per_dim: 7
+optim:
+  optimizer: 'Adam'
+  lr: 1.0e-3
+  beta1: 0.9
+  eps: 1.0e-8
+  weight_decay: 0
+  warmup: 0
+  grad_clip: -1
 
-min_grid: -3.
-max_grid: 3.
-min_sam: -3.
-max_sam: 3.
+model:
+  name: 'ScoreNet'
+  sigma_min: 0.01
+  sigma_max: 0.3
+  beta_min: 0.1
+  beta_max: 1.0
+  T: 1.0
+  num_scales: 2000
+  k0: 3.6
+  temperature: 1.0
+  k_near: 5
 
-# 
-ntrajs_train: 100000
-ntrajs_sample: 50000
+training:
+  sde: 'vesde'
+  ntrajs: 20000
+  batch_size: 2048
+  n_iter: 3000
 
-# optimization
-lr_train: 1.0e-3
-lr_sde: 1.0e-4
-batch_size: 2048
-n_epochs: 2000
-n_steps: 1000
+sampler:
+  method: 'em'
+  ntrajs: 20000
+  snr: 0.17
 
-# physics
-d_max: 5
-k0: 0.01
-T: 1
+log:
+  print_interval: 20
+  save_interval: 1000
+  verbose: False
 
-# verbose
-print_interval: 100
+path:
+  output:
+  checkpoints:
+  eval:
+  params:

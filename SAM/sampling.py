@@ -2,9 +2,11 @@ import torch
 import time
 from SAM import datasets, utils
 from tqdm import tqdm
-import math, abc
+import math
+import abc
 
 _PREDICTORS = {}
+
 
 def register_predictor(cls=None, *, name=None):
     """A decorator for registering predictor classes."""
@@ -15,7 +17,8 @@ def register_predictor(cls=None, *, name=None):
         else:
             local_name = name
         if local_name in _PREDICTORS:
-            raise ValueError(f'Already registered model with name: {local_name}')
+            raise ValueError(
+                f'Already registered model with name: {local_name}')
         _PREDICTORS[local_name] = cls
         return cls
 
@@ -24,20 +27,22 @@ def register_predictor(cls=None, *, name=None):
     else:
         return _register(cls)
 
+
 class Predictor(abc.ABC):
-  """The abstract class for a predictor algorithm."""
+    """The abstract class for a predictor algorithm."""
 
-  def __init__(self, sde, score_fn, probability_flow=False):
-    super().__init__()
-    self.sde = sde
-    # Compute the reverse SDE/ODE
-    self.rsde = sde.reverse(score_fn, probability_flow)
-    self.score_fn = score_fn
+    def __init__(self, sde, score_fn, probability_flow=False):
+        super().__init__()
+        self.sde = sde
+        # Compute the reverse SDE/ODE
+        self.rsde = sde.reverse(score_fn, probability_flow)
+        self.score_fn = score_fn
 
-  @abc.abstractmethod
-  def update_fn(self, x, t):
-    """One update of the predictor."""
-    pass
+    @abc.abstractmethod
+    def update_fn(self, x, t):
+        """One update of the predictor."""
+        pass
+
 
 @register_predictor(name='euler_maruyama')
 class EulerMaruyamaPredictor(Predictor):
@@ -54,7 +59,7 @@ class EulerMaruyamaPredictor(Predictor):
 
 
 def get_em_sampler(cfg, x_init, sde, sampling_eps):
-    
+
     def Euler_Maruyama_sampler(score):
         score_fn = utils.get_score_fn(sde, score, train=True)
 
@@ -63,15 +68,17 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
         x = x_init
         with torch.no_grad():
             for time_step in tqdm(time_steps, desc="Sampling"):
-                t = torch.ones(cfg.sampler.ntrajs, device=cfg.device) * time_step
+                t = torch.ones(cfg.sampler.ntrajs,
+                               device=cfg.device) * time_step
 
                 drift, diffusion = sde.sde(x, t)
                 drift = drift - diffusion[:, None] ** 2 * score_fn(x, t)
                 mean_x = x + drift * dt
-                x = mean_x + torch.sqrt(-dt) * diffusion[:, None] * torch.randn_like(x)   
+                x = mean_x + torch.sqrt(-dt) * \
+                    diffusion[:, None] * torch.randn_like(x)
 
         return mean_x
-    
+
     return Euler_Maruyama_sampler
 
 
@@ -88,13 +95,13 @@ def get_sampling_fn(cfg, sde, sampling_eps):
     else:
         raise ValueError(f"Sampler {cfg.sampler} not recognized.")
 
-###====================================   Sampling   ==============================================================
+# ====================================   Sampling   ==============================================================
 # def Euler_Maruyama_sampler(score_model,
 #                            shape,
 #                            x_init,
-#                            diffusion_coeff, 
-#                            batch_size=64, 
-#                            n_steps=1000, 
+#                            diffusion_coeff,
+#                            batch_size=64,
+#                            n_steps=1000,
 #                            eps=1e-3):
 #     start_time = time.time()
 
@@ -112,7 +119,7 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 #             g = diffusion_coeff(batch_time_step)[:, None]
 #             # g = diffusion_coeff(batch_time_step)[:, None, None] # Unet
 #             mean_x = x + (g**2) * score_model(x, batch_time_step) * step_size
-#             x = mean_x + torch.sqrt(step_size) * g * torch.randn_like(x)    
+#             x = mean_x + torch.sqrt(step_size) * g * torch.randn_like(x)
 
 #     end_time = time.time()
 #     print(f"Num of trajectories: {batch_size}")
@@ -126,8 +133,8 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 # def pc_sampler(score_model,
 #                 shape,
 #                 init_x,
-#                 diffusion_coeff, 
-#                 batch_size=64, 
+#                 diffusion_coeff,
+#                 batch_size=64,
 #                 n_steps=1000,
 #                 snr=0.01,
 #                 eps=1e-3):
@@ -157,7 +164,7 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 #             g = diffusion_coeff(batch_time_step)[:, None]
 #             # g = diffusion_coeff(batch_time_step)[:, None, None] # Unet
 #             mean_x = x + (g**2) * score_model(x, batch_time_step) * step_size
-#             x = mean_x + torch.sqrt(step_size) * g * torch.randn_like(x)    
+#             x = mean_x + torch.sqrt(step_size) * g * torch.randn_like(x)
 
 #     end_time = time.time()
 #     print(f"Num of trajectories: {batch_size}")
