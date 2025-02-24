@@ -1,12 +1,12 @@
 net:
-  depth: 3
+  depth: 4
   width: 256
   use_bn: False
 
 data:
   cfg_flag: 1
-  d: 1
-  n_all_per_dim: 50
+  d: 3
+  n_all_per_dim: 5
   n_sam_per_dim: 5
   n_all:
   n_sam:
@@ -19,7 +19,7 @@ data:
 
 optim:
   optimizer: 'Adam'
-  lr: 1.0e-3
+  lr: 5.0e-4
   beta1: 0.9
   eps: 1.0e-8
   weight_decay: 0
@@ -30,19 +30,22 @@ model:
   name: 'ScoreNet'
   sigma_min: 0.01
   sigma_max: 0.3
-  beta_min: 0.1
-  beta_max: 1.0
+  beta_min: 0.01
+  beta_max: 0.05
   T: 1.0
-  num_scales: 2000
+  num_scales: 5000
   k0: 3.6
   temperature: 1.0
   k_near: 5
 
 training:
-  sde: 'vesde'
-  ntrajs: 20000
+  sde: 'vpsde'
+  ntrajs: 50000
   batch_size: 2048
   n_iter: 3000
+  initial_step: 0
+  reduce_mean: False
+  likelihood_weighting: False
 
 sampler:
   method: 'em'

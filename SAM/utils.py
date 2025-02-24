@@ -71,13 +71,15 @@ def get_evaluate_fn(cfg, dataset, save_eval=False):
 
         mean_pred = torch.mean(x_pred, axis=0)
         std_pred = torch.std(x_pred, axis=0)
-        err_mean = torch.mean(torch.abs(mean_pred - mean_true))
-        err_std = torch.mean(torch.abs(std_pred - std_true))
+        err_mean = torch.mean(torch.abs((mean_pred - mean_true)/cfg.data.grid_step))
+        err_std = torch.mean(torch.abs((std_pred - std_true)/std_true))
+        # print(f"Mean_pred: {mean_pred:.5f}\n, mean_true: {mean_true:.5f}")
+        # print(f"Std_pred: {mean_pred:.5f}\n, std_true: {mean_true:.5f}")
         print(f"Mean Error: {err_mean:.5f}, Std Error: {err_std:.5f}")
 
         V_true = potential_fn(x_true, mean_true)
         V_pred = potential_fn(x_pred, mean_pred)
-        err_V = torch.mean(torch.abs(V_pred - V_true))
+        err_V = torch.abs((V_pred - V_true)/V_true)
         print(f"Predicted Potential: {V_pred:.5f}")
         print(f"Potential Error: {err_V:.5f}")
 
@@ -85,7 +87,7 @@ def get_evaluate_fn(cfg, dataset, save_eval=False):
             eval = dict(x_pred=x_pred, V_pred=V_pred, V_true=V_true)
             torch.save(eval, os.path.join(cfg.path.eval, 'eval.pth'))
 
-            create_and_save_hist(x_pred[:, 0, 0], x_true[:, 0, 0], cfg.path.eval)
+            create_and_save_hist(x_pred[:, 1, 0], x_true[:, 1, 0], cfg.path.eval)
         return V_pred
 
     return evaluate_fn

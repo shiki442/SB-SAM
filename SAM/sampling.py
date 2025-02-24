@@ -86,7 +86,8 @@ def get_sampling_fn(cfg, sde, sampling_eps):
     shape = (cfg.sampler.ntrajs, cfg.data.nd)
     x_ref_all, _, ind_sam = datasets.get_data_params(cfg)
     x_ref_sam = x_ref_all[ind_sam]
-    x_init = sde.prior_sampling(shape, torch.flatten(x_ref_sam))
+    x0 = torch.flatten(x_ref_sam)[None, :]
+    x_init = sde.prior_sampling(shape, x0)
 
     if cfg.sampler.method == 'em':
         return get_em_sampler(cfg, x_init, sde, sampling_eps)

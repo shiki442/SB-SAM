@@ -38,10 +38,10 @@ class PdcDataset(Dataset):
 
 
 class MyDataset(Dataset):
-    def __init__(self, x_train):
+    def __init__(self, x_all, ind_sam=None):
         super().__init__()
-        self.x_train = x_train
-        self.shape = x_train.shape
+        self.x_train = x_all
+        self.shape = x_all.shape
 
     def __len__(self):
         return self.x_train.shape[0]

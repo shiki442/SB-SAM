@@ -16,7 +16,8 @@ sys.path.append("./project/songpengcheng/SAM_torch")
 
 
 def train_model_ddp(rank, cfg):
-    dist.init_process_group("nccl", init_method="env://", rank=rank, world_size=cfg.world_size)
+    dist.init_process_group("nccl", init_method="env://",
+                            rank=rank, world_size=cfg.world_size)
     torch.cuda.set_device(rank)
 
     # local_model = score_model.to(rank)
@@ -67,7 +68,7 @@ def train_model(cfg):
     os.makedirs(checkpoint_dir, exist_ok=True)
     # Resume training when intermediate checkpoints are detected
     state = restore_checkpoint(os.path.join(
-        checkpoint_dir, "checkpoint.pth"), state, cfg.device)
+        checkpoint_dir, f'checkpoint_{cfg.training.initial_step}.pth'), state, cfg.device)
     initial_step = int(state['step'])
 
     # Build data loader
@@ -92,14 +93,16 @@ def train_model(cfg):
         raise NotImplementedError(f"SDE {cfg.training.sde} unknown.")
 
     # Build training and evaluation functions
-    train_step_fn = losses.get_step_fn(sde, train=True, optimizer=optimizer)
+    reduce_mean = cfg.training.reduce_mean
+    likelihood_weighting = cfg.training.likelihood_weighting
+    train_step_fn = losses.get_step_fn(sde, train=True, optimizer=optimizer, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
     # Building sampling functions
     sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_eps)
     # Build evaluation function
     evaluate_fn = utils.get_evaluate_fn(cfg, dataset, save_eval=True)
 
     print(f"=========================== Starting Training ===========================")
-    tqdm_epoch = tqdm(range(initial_step, cfg.training.n_iter),
+    tqdm_epoch = tqdm(range(initial_step, cfg.training.n_iter + 1),
                       desc="Training: Optimizer=Adam")
     for epoch in tqdm_epoch:
         for batch in data_loader:
@@ -110,7 +113,7 @@ def train_model(cfg):
         # Print the averaged training loss so far.
         if epoch % cfg.log.print_interval == 0:
             tqdm.write(f'epoch: {epoch}\t loss: {loss.item():.5f}')
-        if epoch % cfg.log.save_interval == 0:
+        if (epoch != 0 and epoch % cfg.log.save_interval == 0) or epoch == cfg.training.n_iter:
             save_checkpoint(os.path.join(
                 checkpoint_dir, f'checkpoint_{epoch}.pth'), state)
     print(f"=========================== Finished Training ===========================\n")
@@ -123,14 +126,51 @@ def train_model(cfg):
     return V_pred
 
 
-def evaluate_model(cfg, dir_path):
+def evaluate_model(cfg, work_dir):
+    # Initialize model.
+    score_model = utils.create_model(cfg)
+    optimizer = losses.get_optimizer(cfg, score_model.parameters())
+    state = dict(optimizer=optimizer, model=score_model, ema=0, step=0)
+
+    # Resume training when intermediate checkpoints are detected
+    state = restore_checkpoint(os.path.join(
+        work_dir, f'checkpoints/checkpoint_{cfg.training.n_iter}.pth'), state, cfg.device)
+    score_model = state['model']
+
+    dataset = datasets.get_dataset(cfg)
+
+    # Setup SDEs
+    if cfg.training.sde == 'vpsde':
+        sde = sde_lib.VPSDE(beta_min=cfg.model.beta_min,
+                            beta_max=cfg.model.beta_max, N=cfg.model.num_scales)
+        sampling_eps = 1e-5
+    elif cfg.training.sde == 'subvpsde':
+        sde = sde_lib.subVPSDE(beta_min=cfg.model.beta_min,
+                               beta_max=cfg.model.beta_max, N=cfg.model.num_scales)
+        sampling_eps = 1e-3
+    elif cfg.training.sde == 'vesde':
+        sde = sde_lib.VESDE(sigma_min=cfg.model.sigma_min,
+                            sigma_max=cfg.model.sigma_max, N=cfg.model.num_scales)
+        sampling_eps = 1e-5
+    else:
+        raise NotImplementedError(f"SDE {cfg.training.sde} unknown.")
+
+    # Building sampling functions
+    sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_eps)
+    # Build evaluation function
+    evaluate_fn = utils.get_evaluate_fn(cfg, dataset)
+    
+    # Generate samples
+    x_pred = sampling_fn(score_model)
+    # Evaluate the model
+    V_pred = evaluate_fn(x_pred)
+    return V_pred
+
+
+def load_eval(cfg, dir_path):
     eval_path = os.path.join(dir_path, 'eval/eval.pth')
     eval = torch.load(eval_path)
     V_pred = eval['V_pred']
-
-    # dataset = datasets.get_pdc_dataset(cfg)
-    # evaluate_fn = utils.get_pdc_evaluate_fn(cfg, dataset)
-    # V_pdc = evaluate_fn(dataset.x_all)
     return V_pred
 
     # score_fn = utils.get_score_fn(sde, score_model, train=False)

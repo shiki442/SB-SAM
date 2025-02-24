@@ -137,19 +137,21 @@ class VPSDE(SDE):
 
     def sde(self, x, t):
         beta_t = self.beta_0 + t * (self.beta_1 - self.beta_0)
-        drift = -0.5 * beta_t[:, None, None, None] * x
+        drift = -0.5 * beta_t[:, None] * x
         diffusion = torch.sqrt(beta_t)
         return drift, diffusion
 
     def marginal_prob(self, x, t):
         log_mean_coeff = -0.25 * t ** 2 * \
             (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
-        mean = torch.exp(log_mean_coeff[:, None, None, None]) * x
+        mean = torch.exp(log_mean_coeff[:,None]) * x
         std = torch.sqrt(1. - torch.exp(2. * log_mean_coeff))
         return mean, std
 
-    def prior_sampling(self, shape):
-        return torch.randn(*shape)
+    def prior_sampling(self, shape, x_mean):
+        mu, sigma = self.marginal_prob(x_mean, self.T*torch.ones(1, device=x_mean.device))
+        # return torch.randn(*shape, device=x_mean.device)
+        return mu + torch.randn(*shape, device=x_mean.device) * sigma
 
     def prior_logp(self, z):
         shape = z.shape
@@ -189,7 +191,7 @@ class subVPSDE(SDE):
 
     def sde(self, x, t):
         beta_t = self.beta_0 + t * (self.beta_1 - self.beta_0)
-        drift = -0.5 * beta_t[:, None, None, None] * x
+        drift = -0.5 * beta_t[:, None] * x
         discount = 1. - torch.exp(-2 * self.beta_0 *
                                   t - (self.beta_1 - self.beta_0) * t ** 2)
         diffusion = torch.sqrt(beta_t * discount)
