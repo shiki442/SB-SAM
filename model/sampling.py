@@ -1,6 +1,6 @@
 import torch
 import time
-from SAM import datasets, utils
+from model import datasets, utils
 from tqdm import tqdm
 import math
 import abc
@@ -72,10 +72,10 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
                                device=cfg.device) * time_step
 
                 drift, diffusion = sde.sde(x, t)
-                drift = drift - diffusion[:, None] ** 2 * score_fn(x, t)
+                drift = drift - diffusion[:, None, None] ** 2 * score_fn(x, t)
                 mean_x = x + drift * dt
                 x = mean_x + torch.sqrt(-dt) * \
-                    diffusion[:, None] * torch.randn_like(x)
+                    diffusion[:, None, None] * torch.randn_like(x)
 
         return mean_x
 
@@ -83,10 +83,10 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
 
 
 def get_sampling_fn(cfg, sde, sampling_eps):
-    shape = (cfg.sampler.ntrajs, cfg.data.nd)
+    shape = (cfg.sampler.ntrajs, cfg.data.d, cfg.data.n_sam)
     x_ref_all, _, ind_sam = datasets.get_data_params(cfg)
     x_ref_sam = x_ref_all[ind_sam]
-    x0 = torch.flatten(x_ref_sam)[None, :]
+    x0 = x_ref_sam.T[None, :]
     x_init = sde.prior_sampling(shape, x0)
 
     if cfg.sampler.method == 'em':

@@ -40,21 +40,26 @@ class PdcDataset(Dataset):
 class MyDataset(Dataset):
     def __init__(self, x_all, ind_sam=None):
         super().__init__()
-        self.x_train = x_all
+        self.x_all = x_all
+        self.x_sam = x_all[:, :, ind_sam]
+        self.ind_sam = ind_sam
         self.shape = x_all.shape
+        # self.shape = [x_all.shape[0], x_all.shape[1]*x_all.shape[2]]
+        self.mean = torch.mean(self.x_sam, axis=0)
+        self.std = torch.std(self.x_sam, axis=0)
 
     def __len__(self):
-        return self.x_train.shape[0]
+        return self.x_all.shape[0]
 
     def __getitem__(self, idx):
-        return self.x_train[idx]
+        return self.x_sam[idx]
 
 # ====================================   Dataset   ==============================================================
 
 
 def get_dataset(cfg):
     sample_all, ind_sam = generate_data(cfg)
-    dataset = SamDataset(sample_all, ind_sam)
+    dataset = MyDataset(sample_all, ind_sam)
     return dataset
 
 
@@ -67,13 +72,13 @@ def get_pdc_dataset(cfg):
 def generate_gauss_data(mean, d2V, cfg):
     d = cfg.data.d
     T = cfg.model.temperature
-    x_all = torch.empty([cfg.training.ntrajs, mean.shape[0], d])
+    x_all = torch.empty([cfg.training.ntrajs, d, mean.shape[0]])
     # mean = torch.zeros_like(mean)
     cov = torch.empty_like(d2V)
     for i in range(d):
         cov[i] = T/2*torch.linalg.inv(d2V[i])
         sampler = torch.distributions.MultivariateNormal(mean[:, i], cov[i])
-        x_all[:, :, i] = sampler.sample((cfg.training.ntrajs, ))
+        x_all[:, i, :] = sampler.sample((cfg.training.ntrajs, ))
     return x_all
 
 
@@ -179,7 +184,7 @@ def process_data(x_pred, x_ref_sam, cfg):
     if x_pred.dim() == 2:
         mu = torch.flatten(x_ref_sam)
     else:
-        mu = x_ref_sam.T
+        mu = x_ref_sam
     is_outliers = (torch.abs(x_pred-mu) >= cfg.data.grid_step)
     # tolerance = max(cfg.data.max_grid, -cfg.data.min_grid) + cfg.data.grid_step
     # is_outliers = (torch.abs(x_pred) >= tolerance)
@@ -190,8 +195,8 @@ def process_data(x_pred, x_ref_sam, cfg):
     mask = torch.ones(x_pred.size(0), dtype=torch.bool)
     mask[rows_to_delete] = False
     x_pred = x_pred[mask]
-    x_pred_p = x_pred.view(n_pred, cfg.data.n_sam, cfg.data.d)
-    return x_pred_p
+    # x_pred_p = x_pred.view(n_pred, cfg.data.n_sam, cfg.data.d)
+    return x_pred
 
 
 def get_data_params(cfg):

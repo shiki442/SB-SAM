@@ -1,7 +1,7 @@
 from tqdm import tqdm
 from config.config import load_config
-from SAM.checkpoint import save_checkpoint, restore_checkpoint
-from SAM import datasets, utils, losses, sde_lib, sampling, nn
+from model.checkpoint import save_checkpoint, restore_checkpoint
+from model import datasets, utils, losses, sde_lib, sampling, nn, ncsnpp
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -95,7 +95,8 @@ def train_model(cfg):
     # Build training and evaluation functions
     reduce_mean = cfg.training.reduce_mean
     likelihood_weighting = cfg.training.likelihood_weighting
-    train_step_fn = losses.get_step_fn(sde, train=True, optimizer=optimizer, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
+    train_step_fn = losses.get_step_fn(
+        sde, train=True, optimizer=optimizer, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
     # Building sampling functions
     sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_eps)
     # Build evaluation function
@@ -159,7 +160,7 @@ def evaluate_model(cfg, work_dir):
     sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_eps)
     # Build evaluation function
     evaluate_fn = utils.get_evaluate_fn(cfg, dataset)
-    
+
     # Generate samples
     x_pred = sampling_fn(score_model)
     # Evaluate the model

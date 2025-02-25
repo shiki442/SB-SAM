@@ -34,6 +34,7 @@ def check_data_config(cfg):
         data.min_grid = 0.
         data.max_sam = (data.n_sam_per_dim-1) * data.grid_step
         data.min_sam = 0.
+    assert data.n_sam_per_dim <= data.n_all_per_dim
     data.n_all = data.n_all_per_dim ** data.d
     data.n_sam = data.n_sam_per_dim ** data.d
     data.nd = data.d * data.n_sam
@@ -69,11 +70,11 @@ def check_device_config(cfg):
 
 
 def generate_params():
-    k_nearest_list = [5]
-    n_list = [3]
+    # k_nearest_list = [5]
+    # n_list = [3]
 
-    # k_nearest_list = [5, 10, 15, 20]
-    # n_list = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+    k_nearest_list = [5, 10, 15, 20]
+    n_list = [5]
 
     # d = 3
     # n_list = [4,8,12,16,20]

@@ -4,7 +4,7 @@ import torch
 import sys
 import os
 
-from SAM.datasets import process_data
+from model.datasets import process_data
 import matplotlib.pyplot as plt
 
 sys.path.append("..")
@@ -52,7 +52,7 @@ def get_score_fn(sde, model, train):
     def score_fn(x, t):
         score = model(x, t)
         std = sde.marginal_prob(torch.zeros_like(x), t)[1]
-        score = -score / std[:, None]
+        score = -score / std[:, None, None]
         return score
 
     return score_fn
@@ -60,7 +60,7 @@ def get_score_fn(sde, model, train):
 # ====================================   evaluate   ====================================
 
 
-def get_evaluate_fn(cfg, dataset, save_eval=False):
+def get_evaluate_fn(cfg, dataset, save_eval=True):
     mean_true = dataset.mean
     std_true = dataset.std
     x_true = dataset.x_sam
@@ -71,7 +71,8 @@ def get_evaluate_fn(cfg, dataset, save_eval=False):
 
         mean_pred = torch.mean(x_pred, axis=0)
         std_pred = torch.std(x_pred, axis=0)
-        err_mean = torch.mean(torch.abs((mean_pred - mean_true)/cfg.data.grid_step))
+        err_mean = torch.mean(
+            torch.abs((mean_pred - mean_true)/cfg.data.grid_step))
         err_std = torch.mean(torch.abs((std_pred - std_true)/std_true))
         # print(f"Mean_pred: {mean_pred:.5f}\n, mean_true: {mean_true:.5f}")
         # print(f"Std_pred: {mean_pred:.5f}\n, std_true: {mean_true:.5f}")
@@ -87,7 +88,8 @@ def get_evaluate_fn(cfg, dataset, save_eval=False):
             eval = dict(x_pred=x_pred, V_pred=V_pred, V_true=V_true)
             torch.save(eval, os.path.join(cfg.path.eval, 'eval.pth'))
 
-            create_and_save_hist(x_pred[:, 1, 0], x_true[:, 1, 0], cfg.path.eval)
+            create_and_save_hist(
+                x_pred[:, 0, 1], x_true[:, 0, 1], cfg.path.eval)
         return V_pred
 
     return evaluate_fn
@@ -109,13 +111,13 @@ def get_pdc_evaluate_fn(cfg, dataset):
 def get_potential_fn(cfg):
 
     def potential(x, mean):
-        n = x.shape[1]
+        n = x.shape[2]
         Fmat = get_force_mat(cfg, n)
         u = x - mean
         V = 0.
         for i in range(cfg.data.d):
-            f = u[:, :, i] @ Fmat[i]
-            V += 0.5 * torch.mean(f * u[:, :, i])
+            f = u[:, i, :] @ Fmat[i]
+            V += 0.5 * torch.mean(f * u[:, i, :])
         return V
 
     return potential

@@ -1,8 +1,17 @@
+import math
 import torch
 from torch import nn
-from SAM.utils import register_model
+from model.utils import register_model
 
-# ====================================   Network   ==============================================================
+
+def conv_len(L_in, kernel_size, stride=1, padding=0, output_padding=0, is_deconv=False):
+    if is_deconv:
+        L_out = (L_in - 1) * stride - 2 * padding + \
+            kernel_size + output_padding
+    else:
+        L_out = math.ceil((L_in + 2 * padding - kernel_size) / stride) + 1
+
+    return L_out
 
 
 def _init_params(layer):
@@ -26,8 +35,8 @@ class GaussianFourierProjection(nn.Module):
         return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 
-@register_model(name='ScoreNet')
-class ScoreNet(nn.Module):
+@register_model(name='ResNet')
+class ResNet(nn.Module):
 
     def __init__(self, cfg):
         super().__init__()
@@ -54,7 +63,9 @@ class ScoreNet(nn.Module):
         self.apply(_init_params)
 
     def forward(self, x, t):
-        h = self.input(x) + self.embed(t)
+        original_shape = x.shape
+        x_f = torch.flatten(x, start_dim=-2)
+        h = self.input(x_f) + self.embed(t)
         # residue connections
         for i in range(self.hidden_depth):
             h = h + self.act(self.fc_all[i](h))
@@ -62,7 +73,7 @@ class ScoreNet(nn.Module):
                 h = self.bn[i](h)
         h = self.output(h)
 
-        return h
+        return h.view(original_shape)
 
 
 class Dense(nn.Module):
@@ -80,42 +91,43 @@ class Dense(nn.Module):
 class Unet(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        channels = [32, 64, 128, 256]
+        channels = [16, 32, 64, 128]
         # time embedding
         self.embed = nn.Sequential(GaussianFourierProjection(
             embed_dim=cfg.net.width), nn.Linear(cfg.net.width, cfg.net.width))
         # fc layers
-        self.conv1 = nn.Conv1d(cfg.data.nd, channels[0], 3, stride=1, bias=False)
+        self.conv1 = nn.Conv1d(
+            cfg.data.d, channels[0], 3, stride=1, bias=False)
         self.dense1 = Dense(cfg.net.width, channels[0])
         self.gnorm1 = nn.GroupNorm(4, num_channels=channels[0])
         self.conv2 = nn.Conv1d(
             channels[0], channels[1], 3, stride=2, bias=False)
         self.dense2 = Dense(cfg.net.width, channels[1])
-        self.gnorm2 = nn.GroupNorm(32, num_channels=channels[1])
+        self.gnorm2 = nn.GroupNorm(16, num_channels=channels[1])
         self.conv3 = nn.Conv1d(
             channels[1], channels[2], 3, stride=2, bias=False)
         self.dense3 = Dense(cfg.net.width, channels[2])
-        self.gnorm3 = nn.GroupNorm(32, num_channels=channels[2])
+        self.gnorm3 = nn.GroupNorm(16, num_channels=channels[2])
         self.conv4 = nn.Conv1d(
             channels[2], channels[3], 3, stride=2, bias=False)
         self.dense4 = Dense(cfg.net.width, channels[3])
-        self.gnorm4 = nn.GroupNorm(32, num_channels=channels[3])
+        self.gnorm4 = nn.GroupNorm(16, num_channels=channels[3])
 
         # Decoding layers where the resolution increases
         self.tconv4 = nn.ConvTranspose1d(
             channels[3], channels[2], 3, stride=2, bias=False, output_padding=1)
         self.dense5 = Dense(cfg.net.width, channels[2])
-        self.tgnorm4 = nn.GroupNorm(32, num_channels=channels[2])
+        self.tgnorm4 = nn.GroupNorm(16, num_channels=channels[2])
         self.tconv3 = nn.ConvTranspose1d(
-            channels[2] + channels[2], channels[1], 3, stride=2, bias=False, output_padding=0)
+            channels[2] + channels[2], channels[1], 3, stride=2, bias=False, output_padding=1)
         self.dense6 = Dense(cfg.net.width, channels[1])
-        self.tgnorm3 = nn.GroupNorm(32, num_channels=channels[1])
+        self.tgnorm3 = nn.GroupNorm(16, num_channels=channels[1])
         self.tconv2 = nn.ConvTranspose1d(
-            channels[1] + channels[1], channels[0], 3, stride=2, bias=False, output_padding=0)
+            channels[1] + channels[1], channels[0], 3, stride=2, bias=False, output_padding=1)
         self.dense7 = Dense(cfg.net.width, channels[0])
-        self.tgnorm2 = nn.GroupNorm(32, num_channels=channels[0])
+        self.tgnorm2 = nn.GroupNorm(16, num_channels=channels[0])
         self.tconv1 = nn.ConvTranspose1d(
-            channels[0] + channels[0], cfg.data.nd, 3, stride=1)
+            channels[0] + channels[0], cfg.data.d, 3, stride=1)
 
         # The swish activation function
         self.act = nn.SiLU()

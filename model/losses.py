@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from SAM import utils
+from model import utils
 
 
 def get_optimizer(cfg, params):
@@ -72,15 +72,15 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
             batch.shape[0], device=batch.device) * (sde.T - eps) + eps
         z = torch.randn_like(batch)
         mean, std = sde.marginal_prob(batch, random_t)
-        perturbed_x = mean + z * std[:, None]
+        perturbed_x = mean + z * std[:, None, None]
         score = model_fn(perturbed_x, random_t)
 
         if not likelihood_weighting:
-            losses = torch.square(score * std[:, None] + z)
+            losses = torch.square(score * std[:, None, None] + z)
             losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1)
         else:
             g2 = sde.sde(torch.zeros_like(batch), random_t)[1] ** 2
-            losses = torch.square(score + z / std[:, None])
+            losses = torch.square(score + z / std[:, None, None])
             losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1) * g2
         return torch.mean(losses)
 
