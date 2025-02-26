@@ -17,6 +17,6 @@ cell.o   : cmm_parms.o
 
 .PHONY : clean veryclean 
 clean:
-	rm -f *.o *.mod *.MOD *~ *.dat *.out fe211
+	rm -f *.o *.mod *.MOD *~ *.dat fe211
 veryclean:
 	rm -f *.o *.mod *.MOD $(EXE)

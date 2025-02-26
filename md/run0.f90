@@ -30,7 +30,7 @@ program run0
 
   open(unit=50,file='norm200.dat')
 
-  tmp=200d0
+  tmp=300d0
 
   call set_temp(tmp)
   call cb1(defm,stress1)

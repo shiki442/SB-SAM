@@ -5,6 +5,8 @@ net:
 
 data:
   cfg_flag: 1
+  # problem: 'quadratic_potential'
+  problem: 'fe211'
   d: 3
   n_all_per_dim: 5
   n_sam_per_dim: 5
@@ -16,6 +18,8 @@ data:
   max_grid: 
   min_sam: 
   max_sam: 
+  data_dir: 'data/'
+  delete_rawdata: False
 
 optim:
   optimizer: 'Adam'

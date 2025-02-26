@@ -78,8 +78,8 @@ contains
 
     ! -- total number of steps; number of steps for equilibration; 
     ! -- number of samples in time
-    integer, parameter :: nstep= 500   ! 1000
-    integer, parameter :: nequi= 2500   ! 2000
+    integer, parameter :: nstep= 1000   ! 1000
+    integer, parameter :: nequi= 2000   ! 2000
     integer, parameter :: nsf=10, nsamp= (nequi)/nsf
     
     ! -- sampled stress
@@ -91,6 +91,7 @@ contains
 
     !:: initialization
     call init_pos
+    call save_init_pos
     call init_vel
     call INIT_NHC
 
@@ -406,8 +407,8 @@ SUBROUTINE INIT_NHC
 
     bsize= (/dble(nx)*a0, dble(ny)*a0, dble(nz)*a0/)
 
-    x(1, :)= (/0D0,   0D0,   0D0/)
-    x(2, :)= (/a0/2d0,  a0/2D0, a0/2D0/)
+    x(1, :)= (/0d0,   0d0,   0d0/)
+    x(2, :)= (/a0/2d0,  a0/2d0, a0/2d0/)
 
     n=0
 
@@ -755,23 +756,29 @@ SUBROUTINE INIT_NHC
     implicit none
 
     integer, save :: mt=0
-    character :: num*3
+    character :: num*5
 
     integer :: i, j, k, m, n, n1, n2    
 
     num= num2str(mt)
-    open(12, file='./data/pos-f'//num//'.dat')
-    open(13, file='./data/pos-f'//num//'.xyz')
+    open(12, file='../data/pos-f.dat', position='append')
 
-    write(13, *) nmax
-    write(13, *) 'Molecular dynamics of Aluminum under PBC'
-    do i=1, nmax
+    write(12, '(6E20.10)') (x(i, :), f(i, :), i = 1, nmax)
+
+    close(12)
+
+   !  open(12, file='../data/pos-f'//num//'.dat')
+   !  open(13, file='../data/pos-f'//num//'.xyz')
+
+   !  write(13, *) nmax
+   !  write(13, *) 'Molecular dynamics of Aluminum under PBC'
+   !  do i=1, nmax
        
-       write(12, '(6E20.10)') x(i, :), f(i,:)
-       write(13, '(A5,6E20.10)') 'Al', x(i, :), f(i,:)
+   !     write(12, '(6E20.10)') x(i, :), f(i,:)
+   !     write(13, '(A5,6E20.10)') 'Al', x(i, :), f(i,:)
 
-    end do
-    close(12); close(13)
+   !  end do
+   !  close(12); close(13)
 
     mt= mt +1
 
@@ -779,12 +786,37 @@ SUBROUTINE INIT_NHC
 
   end subroutine save_data
 
+ subroutine save_init_pos
+
+    implicit none
+
+    integer :: i, j, k, m, n, n1, n2    
+
+    open(14, file='../data/init_pos.dat')
+
+    write(14, *) 'num_atoms ', nmax
+    write(14, '(6E20.10)') (x(i, :), i = 1, nmax)
+
+    close(14)
+
+    return
+
+  end subroutine save_init_pos
 
   function num2str(num) result(str)
-    integer  :: num
-    character:: str*3
-    str=char(int(num/100+48))//char(mod(num,100)/10+48)&
-         //char(mod(num,10)+48); return
+   !  integer, intent(in) :: num
+   !  character(len=3) :: str
+   !  write(str, '(I3)') num
+    integer, intent(in) :: num
+    character(len=5) :: str
+
+    str = char(int(num/10000) + 48) // &
+      char(mod(num,10000)/1000 + 48) // &
+      char(mod(num,1000)/100 + 48) // &
+      char(mod(num,100)/10 + 48) // &
+      char(mod(num,10) + 48) 
+    
+    return
   end function num2str
 
    !:::::::::::::::::::::::: bond function :::::::::::::::::::::::::

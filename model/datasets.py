@@ -1,10 +1,10 @@
 import torch
 from torch.utils.data import Dataset
+import numpy as np
 
-import time
+import time, os
 import math
-# from config.config import cfg
-
+from pathlib import Path
 
 class SamDataset(Dataset):
     def __init__(self, x_all, ind_sam=None):
@@ -58,7 +58,10 @@ class MyDataset(Dataset):
 
 
 def get_dataset(cfg):
-    sample_all, ind_sam = generate_data(cfg)
+    if cfg.data.problem == 'quadratic_potential':
+        sample_all, ind_sam = quadratic_potential_data(cfg)
+    elif cfg.data.problem == 'fe211':
+        sample_all, ind_sam = read_pos_f(cfg)
     dataset = MyDataset(sample_all, ind_sam)
     return dataset
 
@@ -198,31 +201,43 @@ def process_data(x_pred, x_ref_sam, cfg):
     # x_pred_p = x_pred.view(n_pred, cfg.data.n_sam, cfg.data.d)
     return x_pred
 
+def get_init_pos(cfg):
+    if cfg.data.problem == 'quadratic_potential':
+        x_ref_all, ind_sam, _ = get_quadra_data_params(cfg)
+        x_ref_sam = x_ref_all[ind_sam]
+        x0 = x_ref_sam.T[None, :]
+        return x0
+    elif cfg.data.problem == 'fe211':
+        pos = np.loadtxt(cfg.data.data_dir + 'init_pos.dat', dtype=np.float32)
+        pos = pos.reshape(1, 2*pos.shape[0], cfg.data.d)
+        x0 = torch.from_numpy(pos).permute(0, 2, 1)
+        cfg.data.n_sam = x0.shape[2]
+        return x0.to(cfg.device)
 
-def get_data_params(cfg):
+def get_quadra_data_params(cfg):
     x_ref_all = generate_grid(
         cfg.data.d, cfg.data.n_all_per_dim, cfg.data.min_grid, cfg.data.max_grid)
     indij_ref = generate_grid(cfg.data.d, cfg.data.n_all_per_dim, mode='index')
     ind_sam = index_sam(x_ref_all, cfg.data.min_sam, cfg.data.max_sam)
     indij_near = nearest_particles(indij_ref, cfg.model.k_near, cfg.data.d)
     d2V = D2Virial(indij_ref, indij_near, cfg)
-    return x_ref_all.to(cfg.device), d2V.to(cfg.device), ind_sam
+    return x_ref_all.to(cfg.device), ind_sam, d2V.to(cfg.device)
 
 
-def get_eq_data_params(cfg):
-    x_ref_all, d2V, ind_sam = get_data_params(cfg)
+def get_eq_quadra_data_params(cfg):
+    x_ref_all, ind_sam, d2V = get_quadra_data_params(cfg)
     x_ref_sam = x_ref_all[ind_sam]
     d2V_eq = eq_D2Virial(d2V, ind_sam, cfg.data.d)
     return x_ref_sam, d2V_eq.to(cfg.device)
 
 
-def generate_data(cfg):
+def quadratic_potential_data(cfg):
     """Generate a dataset from the example problem."""
     if cfg.log.verbose:
         print(f"=========================== Starting data generation ===========================")
         start_time = time.time()
 
-    x_ref_all, d2V, ind_sam = get_data_params(cfg)
+    x_ref_all, ind_sam, d2V = get_quadra_data_params(cfg)
     sample_all = generate_gauss_data(x_ref_all, d2V, cfg)
     if cfg.log.verbose:
         end_time = time.time()
@@ -242,7 +257,7 @@ def generate_pdc_data(cfg):
         print(f"=========================== Starting data generation ===========================")
         start_time = time.time()
 
-    x_ref_all, d2V_eq = get_eq_data_params(cfg)
+    x_ref_all, d2V_eq = get_eq_quadra_data_params(cfg)
     sample_all = generate_gauss_data(x_ref_all, d2V_eq, cfg)
 
     if cfg.log.verbose:
@@ -254,3 +269,49 @@ def generate_pdc_data(cfg):
         print(f"=========================== Finished data generation  ===========================\n")
 
     return sample_all.to(cfg.device)
+
+
+def fe211_md_data(cfg):
+    data_dir = cfg.data.data_dir
+    output_file = os.path.join(data_dir, 'fe211_md.pt')
+    if 'fe211_md.pt' in os.listdir(data_dir):
+        sample_all = torch.load(output_file, weights_only=True, map_location=cfg.device)
+    else:
+        file_list = sorted([f for f in os.listdir(data_dir) if f.endswith('.dat')])
+        
+        all_data = []
+        for file in file_list:
+            file_path = os.path.join(data_dir, file)
+            data = np.loadtxt(file_path, dtype=np.float32) 
+            all_data.append(data[:,:3])
+
+        all_data = np.stack(all_data)
+        sample_all = torch.from_numpy(all_data).permute(0, 2, 1)
+
+        torch.save(sample_all, output_file)
+    ind_sam = torch.arange(0, sample_all.shape[-1])
+    rawdata_dir = Path(data_dir)
+    if cfg.data.delete_rawdata:
+        for file in rawdata_dir.glob("*.dat"):
+            os.remove(file)
+    return sample_all, ind_sam
+
+
+def read_pos_f(cfg):
+    data_dir = cfg.data.data_dir
+    data_file = os.path.join(data_dir, 'pos-f.dat')
+    output_file = os.path.join(data_dir, 'fe211_md.pt')
+    if 'fe211_md.pt' in os.listdir(data_dir):
+        sample_all = torch.load(output_file, weights_only=True, map_location=cfg.device)
+    else:
+        data = np.loadtxt(data_file, dtype=np.float32)
+        data = data.reshape(-1, 432, data.shape[-1])
+        sample_all = torch.from_numpy(data[:,:,:cfg.data.d]).permute(0, 2, 1).to(cfg.device)
+        torch.save(sample_all, output_file)
+    ind_sam = torch.arange(0, sample_all.shape[-1])
+
+    return sample_all, ind_sam
+
+
+if __name__ == "__main__":
+    fe211_md_data('./data')

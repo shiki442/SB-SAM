@@ -148,3 +148,6 @@ SAM/__pycache__/
 # output files
 output/
 log/
+
+# data files
+data/
