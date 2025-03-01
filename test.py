@@ -29,14 +29,17 @@
 # ------------------------------------------------------
 from model import ncsnpp
 import torch
+import torch.nn as nn
 
 if __name__ == "__main__":
     from config import config
     cfg = config.load_config()
     config.check_config(cfg)
+    cfg.data.n = 125
+    x = torch.randn(100, 3, 125)
+
     unet = ncsnpp.NCSNpp(cfg)
     print(unet)
-    x = torch.randn(100, 3, 125)
     t = torch.rand(100)
     y = unet(x, t)
-    print(y)
+    print(x)

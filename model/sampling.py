@@ -84,7 +84,7 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
 
 def get_sampling_fn(cfg, sde, sampling_eps):
     x0 = datasets.get_init_pos(cfg)
-    shape = (cfg.sampler.ntrajs, cfg.data.d, cfg.data.n_sam)
+    shape = (cfg.sampler.ntrajs, cfg.data.d, cfg.data.n)
     x_init = sde.prior_sampling(shape, x0)
 
     if cfg.sampler.method == 'em':

@@ -1,9 +1,10 @@
 import torch
 from torch import nn
 import functools
+import math
 from model.utils import register_model
 from model import layers, layerspp
-from model.nn import conv_len
+from model.nn import L_out
 
 ResnetBlockDDPM = layerspp.ResnetBlockDDPMpp
 Combine = layerspp.Combine
@@ -14,53 +15,28 @@ get_act = layers.get_act
 default_initializer = layers.default_init
 
 
-
-class GaussianFourierProjection(nn.Module):
-    """Gaussian random features for encoding time steps."""
-
-    def __init__(self, embed_dim, scale=30.):
-        super().__init__()
-        # Randomly sample weights during initialization. These weights are fixed
-        # during optimization and are not trainable.
-        self.W = nn.Parameter(torch.randn(embed_dim // 2)
-                              * scale, requires_grad=False)
-
-    def forward(self, x):
-        x_proj = x[:, None] * self.W[None, :] * 2 * torch.pi
-        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
-
-
-class Dense(nn.Module):
-    """A fully connected layer that reshapes outputs to feature maps."""
-
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        self.dense = nn.Linear(input_dim, output_dim)
-
-    def forward(self, x):
-        return self.dense(x)[..., None]
-
-
-@register_model(name='ncsnpp')
+@register_model(name='NCSNpp')
 class NCSNpp(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
         self.act = act = get_act(cfg)
-        self.nf = nf = cfg.model.nf  # 特征
-        ch_mult = cfg.model.ch_mult  # 通道
+        self.nf = nf = cfg.model.nf
+        ch_mult = cfg.model.ch_mult
         dropout = cfg.model.dropout
         resamp_with_conv = cfg.model.resamp_with_conv
         self.num_res_blocks = num_res_blocks = cfg.model.num_res_blocks
         self.attn_resolutions = attn_resolutions = cfg.model.attn_resolutions
 
         self.num_resolutions = num_resolutions = len(ch_mult)
-        self.all_resolutions = all_resolutions = [cfg.data.n_sam // (2 ** i) for i in range(num_resolutions)]
+        self.all_resolutions = all_resolutions = [
+            cfg.data.n // (2 ** i) for i in range(num_resolutions)]
 
         self.conditional = conditional = cfg.model.conditional  # noise-conditional
         fir = cfg.model.fir
         fir_kernel = cfg.model.fir_kernel
-        self.skip_rescale = skip_rescale = True # self.skip_rescale = skip_rescale = cfg.model.skip_rescale
+        # self.skip_rescale = skip_rescale = cfg.model.skip_rescale
+        self.skip_rescale = skip_rescale = True
 
         self.resblock_type = resblock_type = cfg.model.resblock_type.lower()
         self.progressive = progressive = cfg.model.progressive.lower()
@@ -71,6 +47,7 @@ class NCSNpp(nn.Module):
         init_scale = cfg.model.init_scale
 
         modules = []
+        out_padding = []
         # timestep/noise_level embedding; only for continuous training
         if embedding_type == 'fourier':
             # Gaussian Fourier features embeddings.
@@ -93,25 +70,28 @@ class NCSNpp(nn.Module):
         Combiner = functools.partial(Combine, method=combine_method)
 
         AttnBlock = functools.partial(layerspp.AttnBlockpp,
-                                    init_scale=init_scale,
-                                    skip_rescale=skip_rescale)
+                                      init_scale=init_scale,
+                                      skip_rescale=skip_rescale)
 
         Upsample = functools.partial(layerspp.Upsample,
-                                    with_conv=resamp_with_conv, 
-                                    fir=fir, fir_kernel=fir_kernel)
+                                     with_conv=resamp_with_conv,
+                                     fir=fir, fir_kernel=fir_kernel)
 
         if progressive == 'output_skip':
-            self.pyramid_upsample = layerspp.Upsample(fir=fir, 
-                                                      fir_kernel=fir_kernel, 
-                                                      with_conv=False)
-     
+            # self.pyramid_upsample = layerspp.Upsample(fir=fir,
+            #                                           fir_kernel=fir_kernel,
+            #                                           with_conv=False)
+            Pyramid_Upsample = functools.partial(layerspp.Upsample,
+                                                 with_conv=False,
+                                                 fir=fir, fir_kernel=fir_kernel)
+
         Downsample = functools.partial(layerspp.Downsample,
-                                    with_conv=resamp_with_conv, 
-                                    fir=fir, fir_kernel=fir_kernel)
+                                       with_conv=resamp_with_conv,
+                                       fir=fir, fir_kernel=fir_kernel)
 
         if progressive_input == 'input_skip':
-            self.pyramid_downsample = layerspp.Downsample(fir=fir, 
-                                                          fir_kernel=fir_kernel, 
+            self.pyramid_downsample = layerspp.Downsample(fir=fir,
+                                                          fir_kernel=fir_kernel,
                                                           with_conv=False)
 
         if resblock_type == 'ddpm':
@@ -128,8 +108,7 @@ class NCSNpp(nn.Module):
 
         modules.append(conv3x3(channels, nf))
         hs_c = [nf]
-
-        hs_f = [cfg.data.n_sam]
+        hs_f = [cfg.data.n]
         in_ch = nf
         for i_level in range(num_resolutions):
             # Residual blocks for this resolution
@@ -145,12 +124,12 @@ class NCSNpp(nn.Module):
                 hs_c.append(in_ch)
 
             if i_level != num_resolutions - 1:
-                hs_f.append(conv_len(hs_f[-1], kernel_size=3, stride=2, padding=0))
                 if resblock_type == 'ddpm':
                     modules.append(Downsample(in_ch=in_ch))
                 else:
                     pass  # biggan结构
                     # modules.append(ResnetBlock(down=True, in_ch=in_ch))
+                hs_f.append(L_out(modules[-1], hs_f[-1]))
 
                 if progressive_input == 'input_skip':
                     modules.append(Combiner(dim1=input_pyramid_ch, dim2=in_ch))
@@ -173,6 +152,11 @@ class NCSNpp(nn.Module):
         pyramid_ch = 0
         # Upsampling block
         for i_level in reversed(range(num_resolutions)):
+
+            check_L_out = 0 if L_out(
+                layerspp.Upsample(), hs_f[i_level]) == hs_f[i_level-1] else 1
+            out_padding.append(check_L_out)
+
             for i_block in range(num_res_blocks + 1):
                 out_ch = nf * ch_mult[i_level]
                 modules.append(ResnetBlock(in_ch=in_ch + hs_c.pop(),
@@ -200,6 +184,8 @@ class NCSNpp(nn.Module):
 
                 else:
                     if progressive == 'output_skip':
+                        modules.append(Pyramid_Upsample(in_ch=pyramid_ch,
+                                                        out_padding=out_padding[-2]))
                         modules.append(nn.GroupNorm(num_groups=min(in_ch // 4, 32),
                                                     num_channels=in_ch, eps=1e-6))
                         modules.append(
@@ -212,7 +198,8 @@ class NCSNpp(nn.Module):
 
             if i_level != 0:
                 if resblock_type == 'ddpm':
-                    modules.append(Upsample(in_ch=in_ch))
+                    modules.append(
+                        Upsample(in_ch=in_ch, out_padding=out_padding[-1]))
                 else:
                     pass
                     # modules.append(ResnetBlock(in_ch=in_ch, up=True))
@@ -237,7 +224,7 @@ class NCSNpp(nn.Module):
             temb = None
 
         hs = [modules[m_idx](x)]
-        m_idx += 1        
+        m_idx += 1
         # Downsampling block
         input_pyramid = None
         if self.progressive_input != 'none':
@@ -301,7 +288,8 @@ class NCSNpp(nn.Module):
                         pass
                 else:
                     if self.progressive == 'output_skip':
-                        pyramid = self.pyramid_upsample(pyramid)
+                        pyramid = modules[m_idx](pyramid)
+                        m_idx += 1
                         pyramid_h = self.act(modules[m_idx](h))
                         m_idx += 1
                         pyramid_h = modules[m_idx](pyramid_h)
@@ -316,16 +304,15 @@ class NCSNpp(nn.Module):
                     m_idx += 1
                 else:
                     pass
-        
+
         assert not hs
 
         if self.progressive == 'output_skip':
             h = pyramid
-        
+
         assert m_idx == len(modules)
         # if self.cfg.model.scale_by_sigma:
         #     used_sigmas = used_sigmas.reshape((x.shape[0], *([1] * len(x.shape[1:]))))
         #     h = h / used_sigmas
-        
+
         return h
-    

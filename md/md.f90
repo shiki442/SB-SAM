@@ -133,8 +133,27 @@ contains
 
     end do
     !stress= sum(hist,1)/dble(nsamp)
+
+    open(15, file='../data/data_params.txt')
+
+    write(15, *) 'num_atoms,', nmax
+    write(15, *) 'nx,', nx
+    write(15, *) 'ny,', ny
+    write(15, *) 'nz,', nz
+    write(15, *) 'na,', na
+    write(15, *) 'nf,', nf
+    write(15, *) 'ndim,', ndim
+    write(15, *) 'a0,', a0
+    write(15, *) 'nsample,', nsamp
+    write(15, *) 'KT,', KT
+    write(15, *) 'Temperature,', Temperature
+    write(15, *) 'defm,'
+    do n=1,3
+       write(15, '(3F10.5)') defm(n, :)
+    end do
+
     return
-    close(10);close(11)
+    close(10);close(11);close(15)
 
   end subroutine cb1
 
@@ -794,7 +813,6 @@ SUBROUTINE INIT_NHC
 
     open(14, file='../data/init_pos.dat')
 
-    write(14, *) 'num_atoms ', nmax
     write(14, '(6E20.10)') (x(i, :), i = 1, nmax)
 
     close(14)

@@ -2,25 +2,10 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 
-import time, os
+import time
+import os
 import math
 from pathlib import Path
-
-class SamDataset(Dataset):
-    def __init__(self, x_all, ind_sam=None):
-        super().__init__()
-        self.x_all = x_all
-        self.x_sam = x_all[:, ind_sam, :]
-        self.ind_sam = ind_sam
-        self.shape = [x_all.shape[0], x_all.shape[1]*x_all.shape[2]]
-        self.mean = torch.mean(self.x_sam, axis=0)
-        self.std = torch.std(self.x_sam, axis=0)
-
-    def __len__(self):
-        return self.x_all.shape[0]
-
-    def __getitem__(self, idx):
-        return torch.flatten(self.x_sam[idx], start_dim=-2)
 
 
 class PdcDataset(Dataset):
@@ -37,7 +22,7 @@ class PdcDataset(Dataset):
         return torch.flatten(self.x_all[idx], start_dim=-2)
 
 
-class MyDataset(Dataset):
+class SamDataset(Dataset):
     def __init__(self, x_all, ind_sam=None):
         super().__init__()
         self.x_all = x_all
@@ -62,7 +47,7 @@ def get_dataset(cfg):
         sample_all, ind_sam = quadratic_potential_data(cfg)
     elif cfg.data.problem == 'fe211':
         sample_all, ind_sam = read_pos_f(cfg)
-    dataset = MyDataset(sample_all, ind_sam)
+    dataset = SamDataset(sample_all, ind_sam)
     return dataset
 
 
@@ -74,7 +59,7 @@ def get_pdc_dataset(cfg):
 
 def generate_gauss_data(mean, d2V, cfg):
     d = cfg.data.d
-    T = cfg.model.temperature
+    T = cfg.dynamics.temperature
     x_all = torch.empty([cfg.training.ntrajs, d, mean.shape[0]])
     # mean = torch.zeros_like(mean)
     cov = torch.empty_like(d2V)
@@ -103,9 +88,9 @@ def generate_grid(dim, n, min_val=-0.0, max_val=1.0, mode='pos'):
     return flattened_grid
 
 
-def index_sam(ref_struc, min_sam, max_sam):
+def index_sam(ref_struc, min, max_sam):
     eps = 1.0e-6
-    mask = (ref_struc >= min_sam-eps) & (ref_struc <= max_sam+eps)
+    mask = (ref_struc >= min-eps) & (ref_struc <= max_sam+eps)
     mask = mask.all(dim=1)
     index_sam = torch.nonzero(mask).squeeze()
     return index_sam
@@ -119,16 +104,16 @@ def nearest_particles(r, dist_max, d):
 
 
 def D2Virial(indij_ref, indij_near, cfg):
-    n = cfg.data.n_all_per_dim
+    n = cfg.data.nx_max
     d = cfg.data.d
-    n_all = n ** d
-    d2V = torch.zeros([d, n_all, n_all])
-    ind_x = torch.arange(0, n_all)
+    n_max = n ** d
+    d2V = torch.zeros([d, n_max, n_max])
+    ind_x = torch.arange(0, n_max)
     indij_y = torch.zeros_like(indij_ref)
     Hooke_coeff_fn = get_Hooke_coeff_fn(cfg)
     for i in range(d):
         # The case of r=0
-        d2V_ij = torch.zeros([n_all, n_all])
+        d2V_ij = torch.zeros([n_max, n_max])
         d2V_ij[ind_x, ind_x] += Hooke_coeff_fn(torch.zeros_like(indij_near[0]))
         # The case of r!=0
         for r in indij_near:
@@ -175,7 +160,7 @@ def N(r: torch.Tensor):
 
 def get_Hooke_coeff_fn(cfg):
     def Hooke_coeff(r):
-        k0 = cfg.model.k0 / cfg.data.grid_step**2
+        k0 = cfg.dynamics.k0 / cfg.data.grid_step**2
         dist = torch.sqrt(torch.sum(torch.square(r)))
         if dist <= 1e-3:
             dist = 2.0
@@ -198,8 +183,9 @@ def process_data(x_pred, x_ref_sam, cfg):
     mask = torch.ones(x_pred.size(0), dtype=torch.bool)
     mask[rows_to_delete] = False
     x_pred = x_pred[mask]
-    # x_pred_p = x_pred.view(n_pred, cfg.data.n_sam, cfg.data.d)
+    # x_pred_p = x_pred.view(n_pred, cfg.data.n, cfg.data.d)
     return x_pred
+
 
 def get_init_pos(cfg):
     if cfg.data.problem == 'quadratic_potential':
@@ -211,15 +197,16 @@ def get_init_pos(cfg):
         pos = np.loadtxt(cfg.data.data_dir + 'init_pos.dat', dtype=np.float32)
         pos = pos.reshape(1, 2*pos.shape[0], cfg.data.d)
         x0 = torch.from_numpy(pos).permute(0, 2, 1)
-        cfg.data.n_sam = x0.shape[2]
+        cfg.data.n = x0.shape[2]
         return x0.to(cfg.device)
+
 
 def get_quadra_data_params(cfg):
     x_ref_all = generate_grid(
-        cfg.data.d, cfg.data.n_all_per_dim, cfg.data.min_grid, cfg.data.max_grid)
-    indij_ref = generate_grid(cfg.data.d, cfg.data.n_all_per_dim, mode='index')
+        cfg.data.d, cfg.data.nx_max, cfg.data.min_grid, cfg.data.max_grid)
+    indij_ref = generate_grid(cfg.data.d, cfg.data.nx_max, mode='index')
     ind_sam = index_sam(x_ref_all, cfg.data.min_sam, cfg.data.max_sam)
-    indij_near = nearest_particles(indij_ref, cfg.model.k_near, cfg.data.d)
+    indij_near = nearest_particles(indij_ref, cfg.dynamics.k_near, cfg.data.d)
     d2V = D2Virial(indij_ref, indij_near, cfg)
     return x_ref_all.to(cfg.device), ind_sam, d2V.to(cfg.device)
 
@@ -243,8 +230,8 @@ def quadratic_potential_data(cfg):
         end_time = time.time()
         print(f"Dataset Size: {sample_all.shape}")
         print(f"Dim: {cfg.data.d}")
-        print(f"Num of Total Particles: {cfg.data.n_all}")
-        print(f"Num of SB-SAM Particles: {cfg.data.n_sam}")
+        print(f"Num of Total Particles: {cfg.data.n_max}")
+        print(f"Num of SB-SAM Particles: {cfg.data.n}")
         print(f"Total time = {(end_time-start_time)/60.:.5f}m")
         print(f"=========================== Finished data generation  ===========================\n")
 
@@ -264,7 +251,7 @@ def generate_pdc_data(cfg):
         end_time = time.time()
         print(f"Dataset Size: {sample_all.shape}")
         print(f"Dim: {cfg.data.d}")
-        print(f"Num of Total Particles: {cfg.data.n_all}")
+        print(f"Num of Total Particles: {cfg.data.n_max}")
         print(f"Total time = {(end_time-start_time)/60.:.5f}m")
         print(f"=========================== Finished data generation  ===========================\n")
 
@@ -275,15 +262,17 @@ def fe211_md_data(cfg):
     data_dir = cfg.data.data_dir
     output_file = os.path.join(data_dir, 'fe211_md.pt')
     if 'fe211_md.pt' in os.listdir(data_dir):
-        sample_all = torch.load(output_file, weights_only=True, map_location=cfg.device)
+        sample_all = torch.load(
+            output_file, weights_only=True, map_location=cfg.device)
     else:
-        file_list = sorted([f for f in os.listdir(data_dir) if f.endswith('.dat')])
-        
+        file_list = sorted(
+            [f for f in os.listdir(data_dir) if f.endswith('.dat')])
+
         all_data = []
         for file in file_list:
             file_path = os.path.join(data_dir, file)
-            data = np.loadtxt(file_path, dtype=np.float32) 
-            all_data.append(data[:,:3])
+            data = np.loadtxt(file_path, dtype=np.float32)
+            all_data.append(data[:, :3])
 
         all_data = np.stack(all_data)
         sample_all = torch.from_numpy(all_data).permute(0, 2, 1)
@@ -302,11 +291,13 @@ def read_pos_f(cfg):
     data_file = os.path.join(data_dir, 'pos-f.dat')
     output_file = os.path.join(data_dir, 'fe211_md.pt')
     if 'fe211_md.pt' in os.listdir(data_dir):
-        sample_all = torch.load(output_file, weights_only=True, map_location=cfg.device)
+        sample_all = torch.load(
+            output_file, weights_only=True, map_location=cfg.device)
     else:
         data = np.loadtxt(data_file, dtype=np.float32)
         data = data.reshape(-1, 432, data.shape[-1])
-        sample_all = torch.from_numpy(data[:,:,:cfg.data.d]).permute(0, 2, 1).to(cfg.device)
+        sample_all = torch.from_numpy(
+            data[:, :, :cfg.data.d]).permute(0, 2, 1).to(cfg.device)
         torch.save(sample_all, output_file)
     ind_sam = torch.arange(0, sample_all.shape[-1])
 

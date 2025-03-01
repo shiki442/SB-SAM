@@ -1,10 +1,10 @@
+from model import layers
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import sys
 sys.path.append('../')
-from model import layers
 
 conv1x1 = layers.ddpm_conv1x1
 conv3x3 = layers.ddpm_conv3x3
@@ -17,7 +17,8 @@ class GaussianFourierProjection(nn.Module):
 
     def __init__(self, embedding_size=256, scale=10.0):
         super().__init__()
-        self.W = nn.Parameter(torch.randn(embedding_size) * scale, requires_grad=False)
+        self.W = nn.Parameter(torch.randn(embedding_size)
+                              * scale, requires_grad=False)
 
     def forward(self, x):
         x_proj = x[:, None] * self.W[None, :] * 2 * np.pi
@@ -40,7 +41,7 @@ class Combine(nn.Module):
             return h + y
         else:
             raise ValueError(f'Method {self.method} not recognized.')
-    
+
 
 class AttnBlockpp(nn.Module):
     """Channel-wise self-attention block. Modified from DDPM."""
@@ -48,7 +49,7 @@ class AttnBlockpp(nn.Module):
     def __init__(self, channels, skip_rescale=False, init_scale=0.):
         super().__init__()
         self.GroupNorm_0 = nn.GroupNorm(num_groups=min(channels // 4, 32), num_channels=channels,
-                                    eps=1e-6)
+                                        eps=1e-6)
         self.NIN_0 = NIN(channels, channels)
         self.NIN_1 = NIN(channels, channels)
         self.NIN_2 = NIN(channels, channels)
@@ -72,11 +73,11 @@ class AttnBlockpp(nn.Module):
             return x + h
         else:
             return (x + h) / np.sqrt(2.)
-    
+
 
 class Upsample(nn.Module):
     def __init__(self, in_ch=None, out_ch=None, with_conv=False, fir=False,
-                fir_kernel=(1, 3, 3, 1)):
+                 fir_kernel=(1, 3, 3, 1), out_padding=0):
         super().__init__()
         out_ch = out_ch if out_ch else in_ch
         if not fir:
@@ -84,7 +85,7 @@ class Upsample(nn.Module):
                 self.Conv_0 = conv3x3(in_ch, out_ch)
         # else:
         #     if with_conv:
-        #         self.Conv2d_0 = up_or_down_sampling.Conv2d(in_ch, out_ch,
+        #         self.Conv2d_0 = up_or_downpling.Conv2d(in_ch, out_ch,
         #                                                     kernel=3, up=True,
         #                                                     resample_kernel=fir_kernel,
         #                                                     use_bias=True,
@@ -93,17 +94,20 @@ class Upsample(nn.Module):
         self.with_conv = with_conv
         self.fir_kernel = fir_kernel
         self.out_ch = out_ch
+        self.out_padding = out_padding
 
     def forward(self, x):
         B, C, L = x.shape
+
         if not self.fir:
-            h = F.interpolate(x, L * 2, mode='nearest')
+            L_out = L * 2 + 1 if self.out_padding == 1 else L * 2
+            h = F.interpolate(x, L_out, mode='nearest')
             if self.with_conv:
                 h = self.Conv_0(h)
         else:
             pass
             # if not self.with_conv:
-            #     h = up_or_down_sampling.upsample_2d(x, self.fir_kernel, factor=2)
+            #     h = up_or_downpling.upsample_2d(x, self.fir_kernel, factor=2)
             # else:
             #     h = self.Conv2d_0(x)
 
@@ -112,7 +116,7 @@ class Upsample(nn.Module):
 
 class Downsample(nn.Module):
     def __init__(self, in_ch=None, out_ch=None, with_conv=False, fir=False,
-                fir_kernel=(1, 3, 3, 1)):
+                 fir_kernel=(1, 3, 3, 1)):
         super().__init__()
         out_ch = out_ch if out_ch else in_ch
         if not fir:
@@ -120,7 +124,7 @@ class Downsample(nn.Module):
                 self.Conv_0 = conv3x3(in_ch, out_ch, stride=2, padding=0)
         # else:
         #     if with_conv:
-        #         self.Conv2d_0 = up_or_down_sampling.Conv2d(in_ch, out_ch,
+        #         self.Conv2d_0 = up_or_downpling.Conv2d(in_ch, out_ch,
         #                                                 kernel=3, down=True,
         #                                                 resample_kernel=fir_kernel,
         #                                                 use_bias=True,
@@ -140,26 +144,29 @@ class Downsample(nn.Module):
                 x = F.avg_pool2d(x, 2, stride=2)
         # else:
         #     if not self.with_conv:
-        #         x = up_or_down_sampling.downsample_2d(x, self.fir_kernel, factor=2)
+        #         x = up_or_downpling.downsample_2d(x, self.fir_kernel, factor=2)
         #     else:
         #         x = self.Conv2d_0(x)
 
         return x
 
+
 class ResnetBlockDDPMpp(nn.Module):
     """ResBlock adapted from DDPM."""
 
     def __init__(self, act, in_ch, out_ch=None, temb_dim=None, conv_shortcut=False,
-                dropout=0.1, skip_rescale=False, init_scale=0.):
+                 dropout=0.1, skip_rescale=False, init_scale=0.):
         super().__init__()
         out_ch = out_ch if out_ch else in_ch
-        self.GroupNorm_0 = nn.GroupNorm(num_groups=min(in_ch // 4, 32), num_channels=in_ch, eps=1e-6)
+        self.GroupNorm_0 = nn.GroupNorm(num_groups=min(
+            in_ch // 4, 32), num_channels=in_ch, eps=1e-6)
         self.Conv_0 = conv3x3(in_ch, out_ch)
         if temb_dim is not None:
             self.Dense_0 = nn.Linear(temb_dim, out_ch)
             self.Dense_0.weight.data = default_init()(self.Dense_0.weight.data.shape)
             nn.init.zeros_(self.Dense_0.bias)
-        self.GroupNorm_1 = nn.GroupNorm(num_groups=min(out_ch // 4, 32), num_channels=out_ch, eps=1e-6)
+        self.GroupNorm_1 = nn.GroupNorm(num_groups=min(
+            out_ch // 4, 32), num_channels=out_ch, eps=1e-6)
         self.Dropout_0 = nn.Dropout(dropout)
         self.Conv_1 = conv3x3(out_ch, out_ch, init_scale=init_scale)
         if in_ch != out_ch:
@@ -190,7 +197,7 @@ class ResnetBlockDDPMpp(nn.Module):
             return x + h
         else:
             return (x + h) / np.sqrt(2.)
-    
+
 
 if __name__ == "__main__":
 

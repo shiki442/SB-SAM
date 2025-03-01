@@ -6,15 +6,15 @@ net:
 data:
   cfg_flag: 1
   d: 1
-  n_all_per_dim: 50
-  n_sam_per_dim: 5
-  n_all:
-  n_sam:
+  nx_max: 50
+  nx: 5
+  n_max:
+  n:
   nd: 
   grid_step: 0.1
   min_grid: 
   max_grid: 
-  min_sam: 
+  min: 
   max_sam: 
 
 optim:

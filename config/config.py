@@ -24,20 +24,50 @@ def load_config(config_file=None):
 
 def check_data_config(cfg):
     data = cfg.data
-    if data.cfg_flag == 0:
-        data.grid_step = (data.max_grid-data.min_grid) / (data.n_all_per_dim-1)
-        n_out = math.ceil((data.max_grid-data.max_sam)/data.grid_step) + \
-            math.ceil((data.min_sam-data.min_grid)/data.grid_step)
-        data.n_sam_per_dim = data.n_all_per_dim - n_out
-    elif data.cfg_flag == 1:
-        data.max_grid = (data.n_all_per_dim-1) * data.grid_step
+    if data.crystal == 'SC':
+        data.max_grid = (data.nx_max-1) * data.grid_step
         data.min_grid = 0.
-        data.max_sam = (data.n_sam_per_dim-1) * data.grid_step
+        data.max_sam = (data.nx-1) * data.grid_step
         data.min_sam = 0.
-    assert data.n_sam_per_dim <= data.n_all_per_dim
-    data.n_all = data.n_all_per_dim ** data.d
-    data.n_sam = data.n_sam_per_dim ** data.d
-    data.nd = data.d * data.n_sam
+        assert data.nx <= data.nx_max
+        data.n_max = data.nx_max ** data.d
+        data.n = data.nx ** data.d
+        data.nf = data.d * data.n
+    if data.crystal == 'BCC':
+        data_dir = os.path.join(data.data_dir, 'data_params.txt')
+        params = read_params(data_dir)
+        data.d = params['ndim']
+        data.nx_max = params['nx']
+        data.n_max = params['num_atoms']
+        assert data.nx <= data.nx_max
+        assert cfg.training.ntrajs <= params['nsample']
+        data.na = params['na']
+        data.n = data.nx ** data.d * data.na
+        data.nf = params['nf']
+
+
+def read_params(filename):
+    params = {}
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+        for line in lines:
+            if ',' in line:
+                key, value = line.split(',')
+                key = key.strip()
+                value = value.strip()
+                try:
+                    if '.' in value:
+                        params[key] = float(value)
+                    else:
+                        params[key] = int(value)
+                except ValueError:
+                    params[key] = []
+            else:
+                if 'defm' in params:
+                    params['defm'].append([float(x) for x in line.split()])
+                else:
+                    params['defm'] = [[float(x) for x in line.split()]]
+    return params
 
 
 def check_path_config(cfg, word_dir='./', create_new_file=True):
@@ -45,7 +75,7 @@ def check_path_config(cfg, word_dir='./', create_new_file=True):
     if create_new_file:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path.output = os.path.join(
-            word_dir, f'output/{timestamp}_N{cfg.data.n_all}_n{cfg.data.n_sam}_k{cfg.model.k_near}_d{cfg.data.d}/')
+            word_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_k{cfg.dynamics.k_near}_d{cfg.data.d}/')
     path.checkpoints = os.path.join(path.output, "checkpoints")
     path.eval = os.path.join(path.output, "eval")
     path.params = os.path.join(path.output, "params", "config.yml")
@@ -74,7 +104,7 @@ def generate_params():
     # n_list = [3]
 
     k_nearest_list = [5, 10, 15, 20]
-    n_list = [5]
+    n_list = [6]
 
     # d = 3
     # n_list = [4,8,12,16,20]
@@ -84,10 +114,10 @@ def generate_params():
         yield {'k_nearest': k, 'n': n}
 
 
-def check_config(cfg, params=None, save_cfg=True, check_path=True):
-    if params is not None:
-        cfg.model.k_near = params['k_nearest']
-        cfg.data.n_sam_per_dim = params['n']
+def check_config(cfg, params_iter=None, save_cfg=True, check_path=True):
+    if params_iter is not None:
+        cfg.dynamics.k_near = params_iter['k_nearest']
+        cfg.data.nx = params_iter['n']
     check_data_config(cfg)
     if check_path:
         check_path_config(cfg)

@@ -7,13 +7,15 @@ data:
   cfg_flag: 1
   # problem: 'quadratic_potential'
   problem: 'fe211'
-  d: 3
-  n_all_per_dim: 5
-  n_sam_per_dim: 5
-  n_all:
-  n_sam:
-  nd: 
-  grid_step: 0.1
+  # crystal: 'SC'
+  crystal: 'BCC'
+  d:
+  nx_max:
+  nx: 6
+  n_max:
+  n:
+  nf: 
+  grid_step:
   min_grid: 
   max_grid: 
   min_sam: 
@@ -31,17 +33,14 @@ optim:
   grad_clip: -1
 
 model:
-  name: 'ncsnpp'
+  name: 'NCSNpp'
   sigma_min: 0.01
   sigma_max: 0.3
   beta_min: 0.01
   beta_max: 0.05
   dropout: 0.1
   T: 1.0
-  num_scales: 5000
-  k0: 3.6
-  temperature: 1.0
-  k_near: 5
+  num_scales: 1000
   nonlinearity: 'swish'
   nf: 32
   ch_mult: [1, 2, 4, 8]
@@ -60,9 +59,14 @@ model:
   init_scale: 0.
   fourier_scale: 16
 
+dynamics:
+  k0: 3.6
+  temperature: 1.0
+  k_near: 5
+
 training:
   sde: 'vpsde'
-  ntrajs: 10000
+  ntrajs: 1000
   batch_size: 1024
   n_iter: 500
   initial_step: 0

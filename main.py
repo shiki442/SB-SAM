@@ -9,8 +9,8 @@ os.environ['MASTER_PORT'] = '64060'
 
 
 def main(cfg):
-    for params in config.generate_params():
-        config.check_config(cfg, params)
+    for params_iter in config.generate_params():
+        config.check_config(cfg, params_iter)
         if cfg.world_size == 1:
             train_model(cfg)
         elif cfg.world_size >= 2:

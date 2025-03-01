@@ -2,16 +2,34 @@ import math
 import torch
 from torch import nn
 from model.utils import register_model
+from model.layers import get_act
+from model import layerspp
 
 
-def conv_len(L_in, kernel_size, stride=1, padding=0, output_padding=0, is_deconv=False):
-    if is_deconv:
-        L_out = (L_in - 1) * stride - 2 * padding + \
-            kernel_size + output_padding
+def L_out(layer, L_in):
+    if isinstance(layer, layerspp.Upsample):
+        return L_in * 2
+    elif isinstance(layer, layerspp.Downsample):
+        # L_in = L_in + 1
+        # kernel_size = 3
+        # stride = 2
+        # padding = 0
+        # dilation = 1
+        return L_in // 2
+    elif isinstance(layer, nn.Conv1d):
+        kernel_size = layer.kernel_size[0]
+        stride = layer.stride[0]
+        padding = layer.padding[0]
+        dilation = layer.dilation[0]
+        return (L_in + 2 * padding - dilation * (kernel_size - 1) - 1) // stride + 1
+    elif isinstance(layer, nn.ConvTranspose1d):
+        kernel_size = layer.kernel_size[0]
+        stride = layer.stride[0]
+        padding = layer.padding[0]
+        output_padding = layer.output_padding[0]
+        return (L_in - 1) * stride - 2 * padding + kernel_size + output_padding
     else:
-        L_out = math.ceil((L_in + 2 * padding - kernel_size) / stride) + 1
-
-    return L_out
+        raise NotImplementedError
 
 
 def _init_params(layer):
@@ -48,16 +66,16 @@ class ResNet(nn.Module):
         self.embed = nn.Sequential(GaussianFourierProjection(
             embed_dim=embed_dim), nn.Linear(embed_dim, embed_dim))
         # fc layers
-        self.input = nn.Linear(cfg.data.nd, embed_dim)
+        self.input = nn.Linear(cfg.data.nf, embed_dim)
         self.fc_all = nn.ModuleList(
             [nn.Linear(embed_dim, embed_dim) for i in range(self.hidden_depth)])
-        self.output = nn.Linear(embed_dim, cfg.data.nd)
+        self.output = nn.Linear(embed_dim, cfg.data.nf)
         # batch normalization
         if self.use_bn:
             self.bn = nn.ModuleList(
                 [nn.BatchNorm1d(num_features=embed_dim) for i in range(self.hidden_depth)])
         # The swish activation function
-        self.act = nn.SiLU()
+        self.act = get_act(cfg)
         self.sigma_min = cfg.model.sigma_min
         self.sigma_max = cfg.model.sigma_max
         self.apply(_init_params)
@@ -91,46 +109,60 @@ class Dense(nn.Module):
 class Unet(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        channels = [16, 32, 64, 128]
+        channels = [x * cfg.model.nf for x in cfg.model.ch_mult]
+        L_outs = []
         # time embedding
         self.embed = nn.Sequential(GaussianFourierProjection(
             embed_dim=cfg.net.width), nn.Linear(cfg.net.width, cfg.net.width))
         # fc layers
         self.conv1 = nn.Conv1d(
             cfg.data.d, channels[0], 3, stride=1, bias=False)
+        L_outs.append(L_out(self.conv1, cfg.data.n))
         self.dense1 = Dense(cfg.net.width, channels[0])
         self.gnorm1 = nn.GroupNorm(4, num_channels=channels[0])
         self.conv2 = nn.Conv1d(
             channels[0], channels[1], 3, stride=2, bias=False)
+        L_outs.append(L_out(self.conv2, L_outs[-1]))
         self.dense2 = Dense(cfg.net.width, channels[1])
         self.gnorm2 = nn.GroupNorm(16, num_channels=channels[1])
         self.conv3 = nn.Conv1d(
             channels[1], channels[2], 3, stride=2, bias=False)
+        L_outs.append(L_out(self.conv3, L_outs[-1]))
         self.dense3 = Dense(cfg.net.width, channels[2])
         self.gnorm3 = nn.GroupNorm(16, num_channels=channels[2])
         self.conv4 = nn.Conv1d(
             channels[2], channels[3], 3, stride=2, bias=False)
+        L_outs.append(L_out(self.conv4, L_outs[-1]))
         self.dense4 = Dense(cfg.net.width, channels[3])
         self.gnorm4 = nn.GroupNorm(16, num_channels=channels[3])
 
         # Decoding layers where the resolution increases
         self.tconv4 = nn.ConvTranspose1d(
-            channels[3], channels[2], 3, stride=2, bias=False, output_padding=1)
+            channels[3], channels[2], 3, stride=2, bias=False)
+        if L_out(self.tconv4, L_outs.pop()) != L_outs[-1]:
+            self.tconv4 = nn.ConvTranspose1d(
+                channels[3], channels[2], 3, stride=2, bias=False, output_padding=1)
         self.dense5 = Dense(cfg.net.width, channels[2])
         self.tgnorm4 = nn.GroupNorm(16, num_channels=channels[2])
         self.tconv3 = nn.ConvTranspose1d(
-            channels[2] + channels[2], channels[1], 3, stride=2, bias=False, output_padding=1)
+            channels[2] + channels[2], channels[1], 3, stride=2, bias=False)
+        if L_out(self.tconv3, L_outs.pop()) != L_outs[-1]:
+            self.tconv3 = nn.ConvTranspose1d(
+                channels[2] + channels[2], channels[1], 3, stride=2, bias=False, output_padding=1)
         self.dense6 = Dense(cfg.net.width, channels[1])
         self.tgnorm3 = nn.GroupNorm(16, num_channels=channels[1])
         self.tconv2 = nn.ConvTranspose1d(
-            channels[1] + channels[1], channels[0], 3, stride=2, bias=False, output_padding=1)
+            channels[1] + channels[1], channels[0], 3, stride=2, bias=False)
+        if L_out(self.tconv2, L_outs.pop()) != L_outs[-1]:
+            self.tconv2 = nn.ConvTranspose1d(
+                channels[1] + channels[1], channels[0], 3, stride=2, bias=False, output_padding=1)
         self.dense7 = Dense(cfg.net.width, channels[0])
         self.tgnorm2 = nn.GroupNorm(16, num_channels=channels[0])
         self.tconv1 = nn.ConvTranspose1d(
             channels[0] + channels[0], cfg.data.d, 3, stride=1)
 
-        # The swish activation function
-        self.act = nn.SiLU()
+        # The activation function
+        self.act = get_act(cfg)
         # self.marginal_prob_std = marginal_prob_std
         # self.apply(_init_params)
 

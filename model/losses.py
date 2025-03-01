@@ -63,7 +63,8 @@ def loss_ssm(model, samples, sigma=0.1):
 
 def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, eps=1e-5):
 
-    reduce_op = torch.mean if reduce_mean else lambda *args, **kwargs: 0.5 * torch.sum(*args, **kwargs)
+    reduce_op = torch.mean if reduce_mean else lambda *args, **kwargs: 0.5 * \
+        torch.sum(*args, **kwargs)
 
     def loss_fn(model, batch):
         """The loss function for training score-based generative models."""
@@ -81,7 +82,8 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
         else:
             g2 = sde.sde(torch.zeros_like(batch), random_t)[1] ** 2
             losses = torch.square(score + z / std[:, None, None])
-            losses = reduce_op(losses.reshape(losses.shape[0], -1), dim=-1) * g2
+            losses = reduce_op(losses.reshape(
+                losses.shape[0], -1), dim=-1) * g2
         return torch.mean(losses)
 
     return loss_fn
@@ -90,7 +92,8 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
 def get_step_fn(sde, train=True, optimizer=None, reduce_mean=False, likelihood_weighting=False):
     """Returns a step function based on `config`."""
     if train:
-        loss_fn = get_sde_loss_fn(sde, train, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
+        loss_fn = get_sde_loss_fn(
+            sde, train, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
     else:
         pass
 
