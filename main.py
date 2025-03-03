@@ -9,12 +9,13 @@ os.environ['MASTER_PORT'] = '64060'
 
 
 def main(cfg):
-    for params_iter in config.generate_params():
-        config.check_config(cfg, params_iter)
-        if cfg.world_size == 1:
-            train_model(cfg)
-        elif cfg.world_size >= 2:
-            mp.spawn(train_model_ddp, args=cfg, nprocs=cfg.world_size)
+    # for params_iter in config.generate_params():
+        # config.check_config(cfg, params_iter)
+    config.check_config(cfg)
+    if cfg.world_size <= 1:
+        train_model(cfg)
+    elif cfg.world_size >= 2:
+        mp.spawn(train_model_ddp, args=(cfg,), nprocs=cfg.world_size, join=True)
 
 
 if __name__ == "__main__":

@@ -5,17 +5,23 @@ net:
 
 data:
   cfg_flag: 1
+  # problem: 'quadratic_potential'
+  problem: 'fe211'
+  # crystal: 'SC'
+  crystal: 'BCC'
   d: 1
   nx_max: 50
   nx: 5
   n_max:
   n:
-  nd: 
+  nf: 
   grid_step: 0.1
   min_grid: 
   max_grid: 
-  min: 
+  min_sam: 
   max_sam: 
+  data_dir:
+  delete_rawdata:
 
 optim:
   optimizer: 'Adam'
@@ -27,25 +33,22 @@ optim:
   grad_clip: -1
 
 model:
-  name: 'ResNet'
+  name: 'Unet'
   sigma_min: 0.01
   sigma_max: 0.3
   beta_min: 0.01
   beta_max: 0.05
   dropout: 0.1
   T: 1.0
-  num_scales: 5000
-  k0: 3.6
-  temperature: 1.0
-  k_near: 5
+  num_scales: 1000
   nonlinearity: 'swish'
-  nf: 128
-  ch_mult: [1, 1, 2, 2, 2, 2, 2]
-  num_res_blocks: 1
+  nf: 32
+  ch_mult: [1, 2, 4, 8]
+  num_res_blocks: 0
   attn_resolutions: [16,]
   resamp_with_conv: True
   conditional: True
-  fir: True
+  fir: False
   fir_kernel: [1, 3, 3, 1]
   skip_rescale: True
   embedding_type: 'fourier'
@@ -56,11 +59,16 @@ model:
   init_scale: 0.
   fourier_scale: 16
 
+dynamics:
+  k0: 3.6
+  temperature: 1.0
+  k_near: 5
+
 training:
   sde: 'vpsde'
-  ntrajs: 50000
-  batch_size: 2048
-  n_iter: 5000
+  ntrajs: 2000
+  batch_size: 128
+  n_iter: 1000
   initial_step: 0
   continuous: True
   reduce_mean: False
@@ -68,7 +76,7 @@ training:
 
 sampler:
   method: 'em'
-  ntrajs: 20000
+  ntrajs: 1000
   snr: 0.17
 
 log:

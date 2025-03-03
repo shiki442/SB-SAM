@@ -37,13 +37,16 @@ def check_data_config(cfg):
         data_dir = os.path.join(data.data_dir, 'data_params.txt')
         params = read_params(data_dir)
         data.d = params['ndim']
+        data.grid_step = params['a0']
         data.nx_max = params['nx']
         data.n_max = params['num_atoms']
         assert data.nx <= data.nx_max
         assert cfg.training.ntrajs <= params['nsample']
+        assert cfg.sampler.ntrajs <= params['nsample']
         data.na = params['na']
         data.n = data.nx ** data.d * data.na
         data.nf = params['nf']
+    assert cfg.training.batch_size <= cfg.training.ntrajs
 
 
 def read_params(filename):
@@ -100,10 +103,10 @@ def check_device_config(cfg):
 
 
 def generate_params():
-    # k_nearest_list = [5]
+    k_nearest_list = [5]
     # n_list = [3]
 
-    k_nearest_list = [5, 10, 15, 20]
+    # k_nearest_list = [5, 10, 15, 20]
     n_list = [6]
 
     # d = 3

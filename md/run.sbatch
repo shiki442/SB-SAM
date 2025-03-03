@@ -1,11 +1,21 @@
 #!/bin/bash
 
-#SBATCH --partition=hpxg
+#SBATCH -A yangzhijian
+#SBATCH -J MD
+#SBATCH --partition=hpib
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=06:00:00
+#SBATCH --cpus-per-task=1
 #SBATCH -o job-%j.out
 #SBATCH -e job-%j.err
+
+echo Directory is $PWD
+echo This job runs on the following nodes: $SLURM_JOB_NODELIST
+echo This job has allocated $SLURM_JOB_CPUS_PER_NODE cpu cores.
+
+echo ---------------------------------------------
+echo configuration file: params3d
+echo Time is `date`
 
 module load intel/parallelstudio/2019
 
@@ -16,3 +26,5 @@ make clean
 make
 
 ./fe211
+
+echo End at `date`

@@ -29,7 +29,6 @@ class SamDataset(Dataset):
         self.x_sam = x_all[:, :, ind_sam]
         self.ind_sam = ind_sam
         self.shape = x_all.shape
-        # self.shape = [x_all.shape[0], x_all.shape[1]*x_all.shape[2]]
         self.mean = torch.mean(self.x_sam, axis=0)
         self.std = torch.std(self.x_sam, axis=0)
 
@@ -295,13 +294,13 @@ def read_pos_f(cfg):
             output_file, weights_only=True, map_location=cfg.device)
     else:
         data = np.loadtxt(data_file, dtype=np.float32)
-        data = data.reshape(-1, 432, data.shape[-1])
+        data = data.reshape(-1, cfg.data.n_max, 2*cfg.data.d)
         sample_all = torch.from_numpy(
             data[:, :, :cfg.data.d]).permute(0, 2, 1).to(cfg.device)
         torch.save(sample_all, output_file)
     ind_sam = torch.arange(0, sample_all.shape[-1])
 
-    return sample_all, ind_sam
+    return sample_all[:cfg.training.ntrajs], ind_sam
 
 
 if __name__ == "__main__":

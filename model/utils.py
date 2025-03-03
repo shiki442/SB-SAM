@@ -90,6 +90,7 @@ def get_evaluate_fn(cfg, dataset, save_eval=True):
 
             create_and_save_hist(
                 x_pred[:, 0, 1], x_true[:, 0, 1], cfg.path.eval)
+            create_and_save_rdf(x_pred, x_true, cfg.path.eval)
         return V_pred
 
     return evaluate_fn
@@ -145,6 +146,50 @@ def create_and_save_hist(x_pred, x_true, path):
                  edgecolor='black', density=True)
     axes[1].set_title(f'true data: x')
     path = os.path.join(path, 'hist.png')
+    plt.savefig(path)
+    plt.close()
+
+
+def compute_rdf(positions, box_size, r_max, bin_width, normalize=True):
+
+    num_bins = int(r_max / bin_width)
+    rdf_hist = torch.zeros(num_bins)
+    num_particles = positions.shape[-1]
+    num_samples = positions.shape[0]
+
+    for k in range(num_samples):
+        position = positions[k].T
+        # 计算所有粒子对之间的距离 (考虑周期性边界条件)
+        r = torch.linalg.norm(position, axis=1)
+
+        for i in range(num_particles):
+            # for j in range(i + 1, num_particles):
+            #     delta = position[i] - position[j]
+            #     delta -= torch.round(delta / box_size) * box_size  # PBC 处理
+
+            if r[i] < r_max:
+                bin_index = int(r[i] / bin_width)
+                rdf_hist[bin_index] += 1  # 计数加 2，因为是无序对
+
+    # 计算归一化 RDF
+    r_values = (torch.arange(num_bins) + 0.5) * bin_width
+    shell_volumes = (4 / 3) * torch.pi * \
+        ((r_values + bin_width) ** 3 - r_values ** 3)
+    ideal_density = num_particles / (box_size ** 3)
+    if normalize:
+        rdf_hist = rdf_hist / (shell_volumes * ideal_density * num_particles)
+
+    return r_values, rdf_hist
+
+
+def create_and_save_rdf(x_pred, x_true, path):
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, sharex=True, sharey=True, figsize=(10, 5))
+    r_values, g_r = compute_rdf(x_pred, 8.679412704, 10, 0.1)
+    r_values_true, g_r_true = compute_rdf(x_true, 8.679412704, 10, 0.1)
+    axes[0].plot(r_values, g_r, label='Radial Distribution Function')
+    axes[1].plot(r_values_true, g_r_true, label='Radial Distribution Function')
+    path = os.path.join(path, 'rdf.png')
     plt.savefig(path)
     plt.close()
 

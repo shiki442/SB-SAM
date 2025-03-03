@@ -1,4 +1,3 @@
-
 FC  = ifort
 
 EXE = fe211
@@ -18,5 +17,8 @@ cell.o   : cmm_parms.o
 .PHONY : clean veryclean 
 clean:
 	rm -f *.o *.mod *.MOD *~ *.dat fe211
+	rm -f ../data/*
+
 veryclean:
 	rm -f *.o *.mod *.MOD $(EXE)
+	rm -f ../data/*

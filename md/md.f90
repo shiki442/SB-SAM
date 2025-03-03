@@ -79,7 +79,7 @@ contains
     ! -- total number of steps; number of steps for equilibration; 
     ! -- number of samples in time
     integer, parameter :: nstep= 1000   ! 1000
-    integer, parameter :: nequi= 2000   ! 2000
+    integer, parameter :: nequi= 100000   ! 2000
     integer, parameter :: nsf=10, nsamp= (nequi)/nsf
     
     ! -- sampled stress
@@ -98,6 +98,23 @@ contains
     open(10,file='total_energy.dat')
     open(11,file='stress.dat')
 
+    open(15, file='../data/data_params.txt')
+
+    write(15, *) 'num_atoms,', nmax
+    write(15, *) 'nx,', nx
+    write(15, *) 'ny,', ny
+    write(15, *) 'nz,', nz
+    write(15, *) 'na,', na
+    write(15, *) 'nf,', nf
+    write(15, *) 'ndim,', ndim
+    write(15, *) 'a0,', a0
+    write(15, *) 'nsample,', nsamp
+    write(15, *) 'KT,', KT
+    write(15, *) 'defm,'
+    do n=1,3
+       write(15, '(3F10.5)') defm(n, :)
+    end do
+
     ntime= 0
     do n=1, nstep
        ! -- symmetric operator splitting
@@ -111,6 +128,8 @@ contains
     !        call save_data
     !   end if 
    enddo       
+
+    write(15, *) 'Temperature,', Temperature
 
     do n=1,nequi
 
@@ -133,24 +152,6 @@ contains
 
     end do
     !stress= sum(hist,1)/dble(nsamp)
-
-    open(15, file='../data/data_params.txt')
-
-    write(15, *) 'num_atoms,', nmax
-    write(15, *) 'nx,', nx
-    write(15, *) 'ny,', ny
-    write(15, *) 'nz,', nz
-    write(15, *) 'na,', na
-    write(15, *) 'nf,', nf
-    write(15, *) 'ndim,', ndim
-    write(15, *) 'a0,', a0
-    write(15, *) 'nsample,', nsamp
-    write(15, *) 'KT,', KT
-    write(15, *) 'Temperature,', Temperature
-    write(15, *) 'defm,'
-    do n=1,3
-       write(15, '(3F10.5)') defm(n, :)
-    end do
 
     return
     close(10);close(11);close(15)

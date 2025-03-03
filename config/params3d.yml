@@ -20,7 +20,7 @@ data:
   max_grid: 
   min_sam: 
   max_sam: 
-  data_dir: 'data/'
+  data_dir: 'data6/'
   delete_rawdata: False
 
 optim:
@@ -40,7 +40,7 @@ model:
   beta_max: 0.05
   dropout: 0.1
   T: 1.0
-  num_scales: 1000
+  num_scales: 2000
   nonlinearity: 'swish'
   nf: 32
   ch_mult: [1, 2, 4, 8]
@@ -66,9 +66,9 @@ dynamics:
 
 training:
   sde: 'vpsde'
-  ntrajs: 1000
+  ntrajs: 10000
   batch_size: 1024
-  n_iter: 500
+  n_iter: 300
   initial_step: 0
   continuous: True
   reduce_mean: False
@@ -76,7 +76,7 @@ training:
 
 sampler:
   method: 'em'
-  ntrajs: 1000
+  ntrajs: 3000
   snr: 0.17
 
 log:
