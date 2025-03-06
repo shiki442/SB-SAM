@@ -78,8 +78,8 @@ contains
 
     ! -- total number of steps; number of steps for equilibration; 
     ! -- number of samples in time
-    integer, parameter :: nstep= 1000   ! 1000
-    integer, parameter :: nequi= 100000   ! 2000
+    integer, parameter :: nstep= 2000   ! 1000
+    integer, parameter :: nequi= 200000   ! 2000
     integer, parameter :: nsf=10, nsamp= (nequi)/nsf
     
     ! -- sampled stress
@@ -98,7 +98,7 @@ contains
     open(10,file='total_energy.dat')
     open(11,file='stress.dat')
 
-    open(15, file='../data/data_params.txt')
+    open(15, file='../data12/data_params.txt')
 
     write(15, *) 'num_atoms,', nmax
     write(15, *) 'nx,', nx
@@ -129,8 +129,6 @@ contains
     !   end if 
    enddo       
 
-    write(15, *) 'Temperature,', Temperature
-
     do n=1,nequi
 
        call INTG_NHC
@@ -152,7 +150,9 @@ contains
 
     end do
     !stress= sum(hist,1)/dble(nsamp)
-
+    
+    write(15, *) 'Temperature,', Temperature
+    
     return
     close(10);close(11);close(15)
 
@@ -501,7 +501,7 @@ SUBROUTINE INIT_NHC
     implicit none
 
     real(8) :: v0(3)
-    integer :: n, k, isd(4)=(/7, 8, 9, 11/)
+    integer :: n, k, isd(4)=(/41, 2, 19, 4/)
 
     do n=1, nmax
        do k=1, 3
@@ -781,14 +781,14 @@ SUBROUTINE INIT_NHC
     integer :: i, j, k, m, n, n1, n2    
 
     num= num2str(mt)
-    open(12, file='../data/pos-f.dat', position='append')
+    open(12, file='../data12/pos-f.dat', position='append')
 
     write(12, '(6E20.10)') (x(i, :), f(i, :), i = 1, nmax)
 
     close(12)
 
-   !  open(12, file='../data/pos-f'//num//'.dat')
-   !  open(13, file='../data/pos-f'//num//'.xyz')
+   !  open(12, file='../data12/pos-f'//num//'.dat')
+   !  open(13, file='../data12/pos-f'//num//'.xyz')
 
    !  write(13, *) nmax
    !  write(13, *) 'Molecular dynamics of Aluminum under PBC'
@@ -812,7 +812,7 @@ SUBROUTINE INIT_NHC
 
     integer :: i, j, k, m, n, n1, n2    
 
-    open(14, file='../data/init_pos.dat')
+    open(14, file='../data12/init_pos.dat')
 
     write(14, '(6E20.10)') (x(i, :), i = 1, nmax)
 

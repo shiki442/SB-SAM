@@ -1,14 +1,13 @@
 #!/bin/bash
-#SBATCH -A yangzhijian
-#SBATCH --gres=gpu:4
-#SBATCH -J SAM
-#SBATCH -o ./log/job-%j.out
-#SBATCH -p gpu
-#SBATCH --cpus-per-task=1
-#SBATCH --ntasks=2
 
-RUN_PATH="."
-cd "$RUN_PATH" || exit 1
+#SBATCH -A yangzhijian
+#SBATCH -J MD12
+#SBATCH --partition=hpib
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH -o job-%j.out
+#SBATCH -e job-%j.err
 
 echo Directory is $PWD
 echo This job runs on the following nodes: $SLURM_JOB_NODELIST
@@ -18,5 +17,14 @@ echo ---------------------------------------------
 echo configuration file: params3d
 echo Time is `date`
 
-/project/songpengcheng/miniconda3/envs/torch/bin/python -u main.py --config=./config/params3d.yml
+module load intel/parallelstudio/2019
+
+cd $SLURM_SUBMIT_DIR
+
+make clean
+
+make
+
+./fe211
+
 echo End at `date`

@@ -11,7 +11,7 @@ data:
   crystal: 'BCC'
   d:
   nx_max:
-  nx: 6
+  nx: 4
   n_max:
   n:
   nf: 
@@ -66,17 +66,17 @@ dynamics:
 
 training:
   sde: 'vpsde'
-  ntrajs: 10000
-  batch_size: 1024
-  n_iter: 300
-  initial_step: 0
+  ntrajs: 20000
+  batch_size: 2048
+  n_iter: 100
+  initial_step: 1000
   continuous: True
   reduce_mean: False
   likelihood_weighting: False
 
 sampler:
   method: 'em'
-  ntrajs: 3000
+  ntrajs: 10000
   snr: 0.17
 
 log:
@@ -85,7 +85,7 @@ log:
   verbose: False
 
 path:
-  output:
+  output: './output/20250304_232443_N432_n432_k5_d3'
   checkpoints:
   eval:
   params:

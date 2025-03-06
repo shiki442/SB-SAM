@@ -9,16 +9,20 @@ from torch.utils.data import DataLoader, DistributedSampler, Dataset
 
 import sys
 import os
+import logging
+
 sys.path.append("..")
 sys.path.append("./project/songpengcheng/SAM_torch")
 
-# ====================================   Training   ==============================================================
+# ==========================   Training   ==========================
 
 
 def train_model_ddp(rank, cfg):
     dist.init_process_group("nccl", init_method="env://",
                             rank=rank, world_size=cfg.world_size)
     torch.cuda.set_device(rank)
+    # Set seed
+    utils.set_seed(rank)
 
     # Initialize model.
     score_model = utils.create_model(cfg).to(rank)
@@ -40,7 +44,7 @@ def train_model_ddp(rank, cfg):
         dataset, num_replicas=cfg.world_size, rank=rank, shuffle=True)
     data_loader = DataLoader(dataset, sampler=sampler,
                              batch_size=cfg.training.batch_size, num_workers=0)
-    #  batch_size=cfg.training.batch_size, num_workers=2, persistent_workers=True)
+    #  batch_size=cfg.training.batch_size, num_workers=2, persistent_workers=True
     # Setup SDEs
     if cfg.training.sde == 'vpsde':
         sde = sde_lib.VPSDE(beta_min=cfg.model.beta_min,
@@ -68,29 +72,34 @@ def train_model_ddp(rank, cfg):
     evaluate_fn = utils.get_evaluate_fn(cfg, dataset, save_eval=True)
 
     if rank == 0:
-        print(f"=========================== Starting Training ===========================")
-    for epoch in range(initial_step, cfg.training.n_iter + 1):
+        print(f"========================== Starting Training ==========================")
+    for epoch in range(initial_step, cfg.training.n_iter):
         sampler.set_epoch(epoch)
         for batch in data_loader:
             # Execute one training step
-            batch = batch.to(rank).requires_grad_()
+            batch = batch.to(rank)
             loss = train_step_fn(state, batch)
 
         # Print the averaged training loss so far.
-        if epoch % cfg.log.print_interval == 0 and rank == 0:
-            print(f'epoch: {epoch}\t loss: {loss.item():.5f}')
-        if (epoch != 0 and epoch % cfg.log.save_interval == 0) or epoch == cfg.training.n_iter:
-            if rank == 0:
-                save_checkpoint(os.path.join(
-                    checkpoint_dir, f'checkpoint_{epoch}.pth'), state)
-    if rank == 0:
-        print(
-            f"=========================== Finished Training ===========================\n")
+        if rank == 0:
+            if (epoch+1) % cfg.log.print_interval == 0:
+                logging.info(f'epoch: {epoch+1}\t loss: {loss.item():.5f}')
+            if (epoch+1) % cfg.log.save_interval == 0 or (epoch+1) == cfg.training.n_iter:
+                save_checkpoint(checkpoint_dir, state, epoch+1)
+    torch.cuda.empty_cache()
 
     if rank == 0:
-        # Generate samples
-        x_pred = sampling_fn(score_model)
+        print(f"========================== Finished Training ==========================\n")
 
+    # Generate samples on all ranks
+    x_pred = sampling_fn(score_model).contiguous()
+
+    # Gather x_pred from all GPUs
+    x_pred_list = [torch.zeros_like(x_pred) for _ in range(cfg.world_size)]
+    dist.all_gather(x_pred_list, x_pred)
+    x_pred = torch.cat(x_pred_list, dim=0)
+
+    if rank == 0:
         # Evaluate the model
         V_pred = evaluate_fn(x_pred)
         return V_pred
@@ -100,6 +109,9 @@ def train_model_ddp(rank, cfg):
 
 
 def train_model(cfg):
+    # Set seed
+    utils.set_seed()
+
     # Initialize model.
     score_model = utils.create_model(cfg)
     optimizer = losses.get_optimizer(cfg, score_model.parameters())
@@ -144,23 +156,22 @@ def train_model(cfg):
     # Build evaluation function
     evaluate_fn = utils.get_evaluate_fn(cfg, dataset, save_eval=True)
 
-    print(f"=========================== Starting Training ===========================")
-    tqdm_epoch = tqdm(range(initial_step, cfg.training.n_iter + 1),
+    print(f"========================== Starting Training ==========================")
+    tqdm_epoch = tqdm(range(initial_step, cfg.training.n_iter),
                       desc="Training: Optimizer=Adam")
     for epoch in tqdm_epoch:
         for batch in data_loader:
             # Execute one training step
-            batch = batch.to(cfg.device).requires_grad_()
-            # batch = batch.requires_grad_()
+            batch = batch.to(cfg.device)
             loss = train_step_fn(state, batch)
 
         # Print the averaged training loss so far.
-        if epoch % cfg.log.print_interval == 0:
+        if (epoch+1) % cfg.log.print_interval == 0:
             tqdm.write(f'epoch: {epoch}\t loss: {loss.item():.5f}')
-        if (epoch != 0 and epoch % cfg.log.save_interval == 0) or epoch == cfg.training.n_iter:
-            save_checkpoint(os.path.join(
-                checkpoint_dir, f'checkpoint_{epoch}.pth'), state)
-    print(f"=========================== Finished Training ===========================\n")
+        if (epoch+1) % cfg.log.save_interval == 0 or (epoch+1) == cfg.training.n_iter:
+            save_checkpoint(checkpoint_dir, state, epoch+1)
+    print(f"========================== Finished Training ==========================\n")
+    torch.cuda.empty_cache()
 
     # Generate samples
     x_pred = sampling_fn(score_model)
@@ -216,27 +227,3 @@ def load_eval(cfg, dir_path):
     eval = torch.load(eval_path)
     V_pred = eval['V_pred']
     return V_pred
-
-    # score_fn = utils.get_score_fn(sde, score_model, train=False)
-    # x_pred = sampling.Euler_Maruyama_sampler(score_fn, shape, init_x, diffusion, batch_size=cfg.sampler.ntrajs, n_steps=cfg.model.num_scales, eps=cfg.eps)
-
-    # tqdm_epoch = tqdm(range(50), desc="Training: Optimizer=LBFGS")
-    # for epoch in tqdm_epoch:
-    #     for x in data_loader:
-
-    #         def closure():
-    #             # x = x.requires_grad_()
-    #             optimizer_lbfgs.zero_grad()
-    #             loss = loss_dsm(score_model, x, marginal_prob_std)
-    #             loss.backward()
-    #             return loss
-
-    #         optimizer_lbfgs.step(closure)
-    #     # Print the averaged training loss so far.
-    #     train_loss.append(loss.item())
-    #     if epoch%5==0:
-    #         tqdm.write(f'epoch: {epoch}\t loss: {loss.item():.5f}')
-
-    # optimizer = optimizer_lbfgs
-    # loss_value = closure().item()
-    # optimizer.step(closure)

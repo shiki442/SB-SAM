@@ -61,14 +61,16 @@ class EulerMaruyamaPredictor(Predictor):
 def get_em_sampler(cfg, x_init, sde, sampling_eps):
 
     def Euler_Maruyama_sampler(score):
+        score.eval()
         score_fn = utils.get_score_fn(sde, score, train=True)
 
         time_steps = torch.linspace(1., sampling_eps, sde.N, device=cfg.device)
         dt = time_steps[1] - time_steps[0]
         x = x_init
+        tqdm_bar = tqdm(time_steps, desc="Sampling", mininterval=10, ncols=0)
         with torch.no_grad():
-            for time_step in tqdm(time_steps, desc="Sampling"):
-                t = torch.ones(cfg.sampler.ntrajs,
+            for time_step in tqdm_bar:
+                t = torch.ones(cfg.sampler.ntrajs//cfg.world_size,
                                device=cfg.device) * time_step
 
                 drift, diffusion = sde.sde(x, t)
@@ -84,7 +86,7 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
 
 def get_sampling_fn(cfg, sde, sampling_eps):
     x0 = datasets.get_init_pos(cfg)
-    shape = (cfg.sampler.ntrajs, cfg.data.d, cfg.data.n)
+    shape = (cfg.sampler.ntrajs//cfg.world_size, cfg.data.d, cfg.data.n)
     x_init = sde.prior_sampling(shape, x0)
 
     if cfg.sampler.method == 'em':
@@ -94,7 +96,7 @@ def get_sampling_fn(cfg, sde, sampling_eps):
     else:
         raise ValueError(f"Sampler {cfg.sampler} not recognized.")
 
-# ====================================   Sampling   ==============================================================
+# ===================================   Sampling   ============================================================
 # def Euler_Maruyama_sampler(score_model,
 #                            shape,
 #                            x_init,
@@ -111,7 +113,7 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 #     step_size = time_steps[0] - time_steps[1]
 #     x = x_init
 
-#     print(f"=========================== Start Sampling ===========================")
+#     print(f"========================== Start Sampling ==========================")
 #     with torch.no_grad():
 #         for time_step in tqdm(time_steps, desc="Sampling"):
 #             batch_time_step = torch.ones(batch_size, device=cfg.device) * time_step
@@ -125,7 +127,7 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 #     print(f"Num of SDE Steps: {n_steps}")
 #     print(f"Smallest time step: {eps}")
 #     print(f"Total time = {(end_time-start_time)/60.:.5f}m")
-#     print(f"=========================== Finished Sampling ===========================\n")
+#     print(f"========================== Finished Sampling ==========================\n")
 #     return mean_x
 
 
@@ -147,7 +149,7 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 #     step_size = time_steps[0] - time_steps[1]
 #     x = init_x
 
-#     print(f"=========================== Start Sampling ===========================")
+#     print(f"========================== Start Sampling ==========================")
 #     with torch.no_grad():
 #         for time_step in tqdm(time_steps, desc="Sampling"):
 #             batch_time_step = torch.ones(batch_size, device=cfg.device) * time_step
@@ -170,5 +172,5 @@ def get_sampling_fn(cfg, sde, sampling_eps):
 #     print(f"Num of SDE Steps: {n_steps}")
 #     print(f"Smallest time step: {eps}")
 #     print(f"Total time = {(end_time-start_time)/60.:.5f}m")
-#     print(f"=========================== Finished Sampling ===========================\n")
+#     print(f"========================== Finished Sampling ==========================\n")
 #     return mean_x

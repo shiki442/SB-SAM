@@ -35,7 +35,7 @@ def optimization_manager(cfg):
     return optimize_fn
 
 
-# ====================================   Loss Function   ==============================================================
+# ===================================   Loss Function   ============================================================
 def DSM_loss(model, x, sigma=1.0e-1):
     """The loss function for training score-based generative models.
     Args:
@@ -103,7 +103,7 @@ def get_step_fn(sde, train=True, optimizer=None, reduce_mean=False, likelihood_w
         loss = loss_fn(model, batch)
         loss.backward()
         optimizer.step()
-        state['step'] += 1
+        # state['step'] += 1
         return loss
 
     return step_fn

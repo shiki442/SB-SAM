@@ -3,6 +3,7 @@
 import torch
 import sys
 import os
+import math
 
 from model.datasets import process_data
 import matplotlib.pyplot as plt
@@ -57,7 +58,7 @@ def get_score_fn(sde, model, train):
 
     return score_fn
 
-# ====================================   evaluate   ====================================
+# ==========================   evaluate   ==========================
 
 
 def get_evaluate_fn(cfg, dataset, save_eval=True):
@@ -90,7 +91,7 @@ def get_evaluate_fn(cfg, dataset, save_eval=True):
 
             create_and_save_hist(
                 x_pred[:, 0, 1], x_true[:, 0, 1], cfg.path.eval)
-            create_and_save_rdf(x_pred, x_true, cfg.path.eval)
+            create_and_save_rdf(x_pred, x_true, cfg.path.eval, cfg.data.grid_step)
         return V_pred
 
     return evaluate_fn
@@ -106,7 +107,7 @@ def get_pdc_evaluate_fn(cfg, dataset):
 
     return evaluate_fn
 
-# ====================================   Stress   ====================================
+# ===================================   Stress   ===================================
 
 
 def get_potential_fn(cfg):
@@ -150,45 +151,50 @@ def create_and_save_hist(x_pred, x_true, path):
     plt.close()
 
 
-def compute_rdf(positions, box_size, r_max, bin_width, normalize=True):
-
+def compute_rdf(positions, box_size, r_max, r_min, bin_width):
     num_bins = int(r_max / bin_width)
-    rdf_hist = torch.zeros(num_bins)
-    num_particles = positions.shape[-1]
-    num_samples = positions.shape[0]
+    num_bins = num_bins + 1 if math.modf(r_max / bin_width)[0] > 0.99 else num_bins
+    num_bins_cutoff = int(r_min / bin_width)
+    rdf_hist = torch.zeros(num_bins, device=positions.device)
+    num_particles = positions.shape[0] * positions.shape[-1]
+    positions = positions - torch.floor(positions / box_size) * box_size
+    for i in [-1, 1]:
+        for j in [-1, 1]:
+            for k in [-1, 1]:
+                positions_shifted = positions.clone()
+                positions_shifted[:, 0] *= i
+                positions_shifted[:, 1] *= j
+                positions_shifted[:, 2] *= k
+                r = torch.linalg.norm(positions_shifted, axis=1)
+                mask = r < r_max
+                bin_index = (r[mask] / bin_width).to(torch.int64)
+                rdf_hist += torch.bincount(bin_index)
 
-    for k in range(num_samples):
-        position = positions[k].T
-        # 计算所有粒子对之间的距离 (考虑周期性边界条件)
-        r = torch.linalg.norm(position, axis=1)
-
-        for i in range(num_particles):
-            # for j in range(i + 1, num_particles):
-            #     delta = position[i] - position[j]
-            #     delta -= torch.round(delta / box_size) * box_size  # PBC 处理
-
-            if r[i] < r_max:
-                bin_index = int(r[i] / bin_width)
-                rdf_hist[bin_index] += 1  # 计数加 2，因为是无序对
-
-    # 计算归一化 RDF
-    r_values = (torch.arange(num_bins) + 0.5) * bin_width
+    r_values = (torch.arange(num_bins, device=positions.device) + 0.5) * bin_width
     shell_volumes = (4 / 3) * torch.pi * \
         ((r_values + bin_width) ** 3 - r_values ** 3)
     ideal_density = num_particles / (box_size ** 3)
-    if normalize:
-        rdf_hist = rdf_hist / (shell_volumes * ideal_density * num_particles)
+    rdf_hist = rdf_hist / (shell_volumes * ideal_density)
+    rdf_hist[0:num_bins_cutoff] = 0
 
     return r_values, rdf_hist
 
 
-def create_and_save_rdf(x_pred, x_true, path):
-    fig, axes = plt.subplots(
-        nrows=1, ncols=2, sharex=True, sharey=True, figsize=(10, 5))
-    r_values, g_r = compute_rdf(x_pred, 8.679412704, 10, 0.1)
-    r_values_true, g_r_true = compute_rdf(x_true, 8.679412704, 10, 0.1)
-    axes[0].plot(r_values, g_r, label='Radial Distribution Function')
-    axes[1].plot(r_values_true, g_r_true, label='Radial Distribution Function')
+def create_and_save_rdf(x_pred, x_true, path, a0):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    r_values, g_r = compute_rdf(x_pred, 6*a0, 6*a0, 0.5*a0, a0/64)
+    r_values_true, g_r_true = compute_rdf(x_true, 6*a0, 6*a0, 0.5*a0, a0/64)
+
+    ax.plot(r_values.cpu(), g_r.cpu(), label='Predicted RDF')
+    ax.plot(r_values_true.cpu(), g_r_true.cpu(), label='True RDF')
+    ax.set_title('Radial Distribution Function')
+
+    xticks = [0*a0, 1*a0, 2*a0, 3*a0, 4*a0, 5*a0, 6*a0]
+    xtick_labels = ['0', 'a0', '2a0', '3a0', '4a0', '5a0', '6a0']
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xtick_labels)
+    ax.legend()
+    
     path = os.path.join(path, 'rdf.png')
     plt.savefig(path)
     plt.close()
@@ -209,3 +215,11 @@ def stress_MD(f, x_grid_sam):
     ft = f.transpose(-1, -2)
     p = ft @ x_grid_sam
     return torch.mean(p, axis=0), f
+
+
+def set_seed(rank=0, seed=42):
+    seed += rank
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)

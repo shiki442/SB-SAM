@@ -18,12 +18,14 @@ def restore_checkpoint(ckpt_dir, state, device):
         return state
 
 
-def save_checkpoint(ckpt_dir, state):
+def save_checkpoint(ckpt_dir, state, epoch):
+    step_now = epoch + state['step']
+    path_ckpt = os.path.join(ckpt_dir, f'checkpoint_{step_now}.pth')
     saved_state = {
         'optimizer': state['optimizer'].state_dict(),
         'model': state['model'].state_dict(),
         # 'ema': state['ema'].state_dict(),
         'ema': state['ema'],
-        'step': state['step']
+        'step': epoch + state['step']
     }
-    torch.save(saved_state, ckpt_dir)
+    torch.save(saved_state, path_ckpt)

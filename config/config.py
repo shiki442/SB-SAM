@@ -75,18 +75,18 @@ def read_params(filename):
 
 def check_path_config(cfg, word_dir='./', create_new_file=True):
     path = cfg.path
-    if create_new_file:
+    if path.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path.output = os.path.join(
             word_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_k{cfg.dynamics.k_near}_d{cfg.data.d}/')
     path.checkpoints = os.path.join(path.output, "checkpoints")
     path.eval = os.path.join(path.output, "eval")
     path.params = os.path.join(path.output, "params", "config.yml")
-    if create_new_file:
-        os.makedirs(path.output, exist_ok=True)
-        os.makedirs(path.checkpoints, exist_ok=True)
-        os.makedirs(path.eval, exist_ok=True)
-        os.makedirs(os.path.dirname(path.params), exist_ok=True)
+
+    os.makedirs(path.output, exist_ok=True)
+    os.makedirs(path.checkpoints, exist_ok=True)
+    os.makedirs(path.eval, exist_ok=True)
+    os.makedirs(os.path.dirname(path.params), exist_ok=True)
 
 
 def save_config(cfg):
@@ -103,15 +103,16 @@ def check_device_config(cfg):
 
 
 def generate_params():
-    k_nearest_list = [5]
+    # d = 1
+    # k_nearest_list = [5]
     # n_list = [3]
 
     # k_nearest_list = [5, 10, 15, 20]
-    n_list = [6]
+    # n_list = [6]
 
     # d = 3
-    # n_list = [4,8,12,16,20]
-    # k_nearest = [5,10,15,20]
+    n_list = [4,8,12,16,20]
+    k_nearest_list = [5,10,15,20]
 
     for k, n in itertools.product(k_nearest_list, n_list):
         yield {'k_nearest': k, 'n': n}

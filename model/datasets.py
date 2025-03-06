@@ -38,7 +38,7 @@ class SamDataset(Dataset):
     def __getitem__(self, idx):
         return self.x_sam[idx]
 
-# ====================================   Dataset   ==============================================================
+# ===================================   Dataset   ============================================================
 
 
 def get_dataset(cfg):
@@ -220,7 +220,7 @@ def get_eq_quadra_data_params(cfg):
 def quadratic_potential_data(cfg):
     """Generate a dataset from the example problem."""
     if cfg.log.verbose:
-        print(f"=========================== Starting data generation ===========================")
+        print(f"========================== Starting data generation ==========================")
         start_time = time.time()
 
     x_ref_all, ind_sam, d2V = get_quadra_data_params(cfg)
@@ -232,7 +232,7 @@ def quadratic_potential_data(cfg):
         print(f"Num of Total Particles: {cfg.data.n_max}")
         print(f"Num of SB-SAM Particles: {cfg.data.n}")
         print(f"Total time = {(end_time-start_time)/60.:.5f}m")
-        print(f"=========================== Finished data generation  ===========================\n")
+        print(f"========================== Finished data generation  ==========================\n")
 
     return sample_all.to(cfg.device), ind_sam
 
@@ -240,7 +240,7 @@ def quadratic_potential_data(cfg):
 def generate_pdc_data(cfg):
     """Generate a dataset from the example problem."""
     if cfg.log.verbose:
-        print(f"=========================== Starting data generation ===========================")
+        print(f"========================== Starting data generation ==========================")
         start_time = time.time()
 
     x_ref_all, d2V_eq = get_eq_quadra_data_params(cfg)
@@ -252,7 +252,7 @@ def generate_pdc_data(cfg):
         print(f"Dim: {cfg.data.d}")
         print(f"Num of Total Particles: {cfg.data.n_max}")
         print(f"Total time = {(end_time-start_time)/60.:.5f}m")
-        print(f"=========================== Finished data generation  ===========================\n")
+        print(f"========================== Finished data generation  ==========================\n")
 
     return sample_all.to(cfg.device)
 

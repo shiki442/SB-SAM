@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -A yangzhijian
-#SBATCH -J MD
+#SBATCH -J MD4
 #SBATCH --partition=hpib
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

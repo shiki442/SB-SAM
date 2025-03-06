@@ -1,36 +1,23 @@
 # SB-SAM
+### Introduction
+**A Score-Based Small Atomic Model with Application to Stress Calculation**
 
-#### Description
-{**When you're done, you can delete the content in this README and update the file with details for others getting started with your repository**}
+SB-SAM is a molecular dynamics simulation framework based on Score Matching, designed for stress calculation.
 
-#### Software Architecture
-Software architecture description
+### Related Paper
+(Please add the paper link here)
 
-#### Installation
+### Data Generation
+This project uses molecular dynamics (MD) to simulate the particle distribution of an NVT ensemble as training samples.
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+The data generation code is stored in the ./md directory.
 
-#### Instructions
+For theoretical background, please refer to "Modeling Materials: Continuum, Atomistic and Multiscale Techniques."
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+### Model Training
+The model is implemented using the PyTorch framework. Configuration parameters are stored in ./config/paramsxx.yml.
 
-#### Contribution
+To run the training process, use the following command:
 
-1.  Fork the repository
-2.  Create Feat_xxx branch
-3.  Commit your code
-4.  Create Pull Request
-
-
-#### Gitee Feature
-
-1.  You can use Readme\_XXX.md to support different languages, such as Readme\_en.md, Readme\_zh.md
-2.  Gitee blog [blog.gitee.com](https://blog.gitee.com)
-3.  Explore open source project [https://gitee.com/explore](https://gitee.com/explore)
-4.  The most valuable open source project [GVP](https://gitee.com/gvp)
-5.  The manual of Gitee [https://gitee.com/help](https://gitee.com/help)
-6.  The most popular members  [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+```python
+python main.py --config=./config/paramsxx.yml
