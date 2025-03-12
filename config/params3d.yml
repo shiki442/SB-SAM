@@ -11,16 +11,21 @@ data:
   crystal: 'BCC'
   d:
   nx_max:
-  nx: 4
+  na: 1
+  nx: 6
+  ny:
+  nz:
   n_max:
   n:
-  nf: 
+  nf:
+  defm: 
   grid_step:
   min_grid: 
   max_grid: 
-  min_sam: 
-  max_sam: 
-  data_dir: 'data6/'
+  min_x: 
+  max_x: 
+  data_dir: 'md/data12/'
+  data_eval_dir: 'md/data12/300K/'
   delete_rawdata: False
 
 optim:
@@ -61,15 +66,15 @@ model:
 
 dynamics:
   k0: 3.6
-  temperature: 1.0
+  temperature: 300.0
   k_near: 5
 
 training:
   sde: 'vpsde'
-  ntrajs: 20000
+  ntrajs: 4000
   batch_size: 2048
   n_iter: 100
-  initial_step: 1000
+  initial_step: 0
   continuous: True
   reduce_mean: False
   likelihood_weighting: False
@@ -85,7 +90,7 @@ log:
   verbose: False
 
 path:
-  output: './output/20250304_232443_N432_n432_k5_d3'
+  output:
   checkpoints:
   eval:
   params:

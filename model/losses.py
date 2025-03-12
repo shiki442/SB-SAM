@@ -66,7 +66,7 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
     reduce_op = torch.mean if reduce_mean else lambda *args, **kwargs: 0.5 * \
         torch.sum(*args, **kwargs)
 
-    def loss_fn(model, batch):
+    def loss_fn(model, batch, tau):
         """The loss function for training score-based generative models."""
         model_fn = utils.get_score_fn(sde, model, train)
         random_t = torch.rand(
@@ -74,7 +74,7 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
         z = torch.randn_like(batch)
         mean, std = sde.marginal_prob(batch, random_t)
         perturbed_x = mean + z * std[:, None, None]
-        score = model_fn(perturbed_x, random_t)
+        score = model_fn(perturbed_x, random_t, tau)
 
         if not likelihood_weighting:
             losses = torch.square(score * std[:, None, None] + z)
@@ -97,10 +97,10 @@ def get_step_fn(sde, train=True, optimizer=None, reduce_mean=False, likelihood_w
     else:
         pass
 
-    def step_fn(state, batch):
+    def step_fn(state, batch, tau):
         model = state['model']
         optimizer.zero_grad()
-        loss = loss_fn(model, batch)
+        loss = loss_fn(model, batch, tau)
         loss.backward()
         optimizer.step()
         # state['step'] += 1

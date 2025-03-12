@@ -25,28 +25,26 @@ def load_config(config_file=None):
 def check_data_config(cfg):
     data = cfg.data
     if data.crystal == 'SC':
-        data.max_grid = (data.nx_max-1) * data.grid_step
-        data.min_grid = 0.
-        data.max_sam = (data.nx-1) * data.grid_step
-        data.min_sam = 0.
         assert data.nx <= data.nx_max
-        data.n_max = data.nx_max ** data.d
-        data.n = data.nx ** data.d
-        data.nf = data.d * data.n
     if data.crystal == 'BCC':
-        data_dir = os.path.join(data.data_dir, 'data_params.txt')
+        data_dir = os.path.join(data.data_eval_dir, 'data_params.txt')
         params = read_params(data_dir)
         data.d = params['ndim']
         data.grid_step = params['a0']
         data.nx_max = params['nx']
         data.n_max = params['num_atoms']
-        assert data.nx <= data.nx_max
-        assert cfg.training.ntrajs <= params['nsample']
-        assert cfg.sampler.ntrajs <= params['nsample']
         data.na = params['na']
-        data.n = data.nx ** data.d * data.na
         data.nf = params['nf']
+        data.defm = params['defm']
+        assert data.nx <= data.nx_max
     assert cfg.training.batch_size <= cfg.training.ntrajs
+    data.n = data.nx ** data.d * data.na
+    data.n_max = data.nx_max ** data.d * data.na
+    data.nf = data.n * data.d
+    data.min_grid = 0.
+    data.max_grid = (data.nx_max-1) * data.grid_step
+    data.min_x = ((data.nx_max - data.nx) // 2) * data.grid_step
+    data.max_x = data.min_x + data.nx * data.grid_step
 
 
 def read_params(filename):

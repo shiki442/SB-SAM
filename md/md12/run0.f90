@@ -11,12 +11,17 @@ program run0
 
   implicit none
 
-  real(8) :: defm(3,3), stress1(3,3), tmp
+  real(8) :: defm(3,3), stress1(3,3)
   real(8) :: e1, e2
+  integer :: i, ierr
+
+  call get_command_line_args()
 
   ! -- deformation gradient
-  defm=0d0; defm(1,1)=1.0d0; defm(2,2)= 1d0; defm(3,3)= 1d0
-
+  defm = 0d0
+  defm(1,1) = 1.0d0
+  defm(2,2) = 1.0d0
+  defm(3,3) = 1.0d0
 
   e1 = 0.01
   e2 = 0.0
@@ -24,16 +29,11 @@ program run0
   defm(1,1) = defm(1,1) + e1
   defm(1,2) = defm(1,2) + e2
 
-
-
   ! -- compute the stress at zero and finite temperature
 
-  open(unit=50,file='norm200.dat')
+  open(unit=50, file=trim(output_dir)//'/norm200.dat')
 
-  tmp=1000d0
-
-  call set_temp(tmp)
-  call cb1(defm,stress1)
+  call cb1(defm, stress1)
 
   !   
   ! -- data to standard output

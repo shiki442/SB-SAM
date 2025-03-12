@@ -79,7 +79,7 @@ contains
     ! -- total number of steps; number of steps for equilibration; 
     ! -- number of samples in time
     integer, parameter :: nstep= 2000   ! 1000
-    integer, parameter :: nequi= 200000   ! 2000
+    integer, parameter :: nequi= 50000   ! 2000
     integer, parameter :: nsf=10, nsamp= (nequi)/nsf
     
     ! -- sampled stress
@@ -95,10 +95,10 @@ contains
     call init_vel
     call INIT_NHC
 
-    open(10,file='total_energy.dat')
-    open(11,file='stress.dat')
+    open(10, file=trim(output_dir)//'/total_energy.dat')
+    open(11, file=trim(output_dir)//'/stress.dat')
 
-    open(15, file='../data12/data_params.txt')
+    open(15, file=trim(output_dir)//'/data_params.txt')
 
     write(15, *) 'num_atoms,', nmax
     write(15, *) 'nx,', nx
@@ -123,7 +123,7 @@ contains
        call INTG_NHC
        call comp_tp
        write(*,*),n,temperature
-       write(10,'(6E16.8)') temperature
+      !  write(10,'(6E16.8)') temperature
     !   if(mod(n,10).eq.0) then
     !        call save_data
     !   end if 
@@ -781,14 +781,14 @@ SUBROUTINE INIT_NHC
     integer :: i, j, k, m, n, n1, n2    
 
     num= num2str(mt)
-    open(12, file='../data12/pos-f.dat', position='append')
+    open(12, file=trim(output_dir)//'/pos-f.dat', position='append')
 
     write(12, '(6E20.10)') (x(i, :), f(i, :), i = 1, nmax)
 
     close(12)
 
-   !  open(12, file='../data12/pos-f'//num//'.dat')
-   !  open(13, file='../data12/pos-f'//num//'.xyz')
+   !  open(12, file=trim(output_dir)//'/pos-f'//num//'.dat')
+   !  open(13, file=trim(output_dir)//'/pos-f'//num//'.xyz')
 
    !  write(13, *) nmax
    !  write(13, *) 'Molecular dynamics of Aluminum under PBC'
@@ -812,7 +812,7 @@ SUBROUTINE INIT_NHC
 
     integer :: i, j, k, m, n, n1, n2    
 
-    open(14, file='../data12/init_pos.dat')
+    open(14, file=trim(output_dir)//'/init_pos.dat')
 
     write(14, '(6E20.10)') (x(i, :), i = 1, nmax)
 

@@ -75,15 +75,16 @@ def train_model_ddp(rank, cfg):
         print(f"========================== Starting Training ==========================")
     for epoch in range(initial_step, cfg.training.n_iter):
         sampler.set_epoch(epoch)
-        for batch in data_loader:
+        for batch, tau in data_loader:
             # Execute one training step
             batch = batch.to(rank)
-            loss = train_step_fn(state, batch)
+            tau = tau.to(rank)
+            loss = train_step_fn(state, batch, tau)
 
         # Print the averaged training loss so far.
         if rank == 0:
             if (epoch+1) % cfg.log.print_interval == 0:
-                logging.info(f'epoch: {epoch+1}\t loss: {loss.item():.5f}')
+                print(f'epoch: {epoch+1}\t loss: {loss.item():.5f}')
             if (epoch+1) % cfg.log.save_interval == 0 or (epoch+1) == cfg.training.n_iter:
                 save_checkpoint(checkpoint_dir, state, epoch+1)
     torch.cuda.empty_cache()
@@ -160,14 +161,15 @@ def train_model(cfg):
     tqdm_epoch = tqdm(range(initial_step, cfg.training.n_iter),
                       desc="Training: Optimizer=Adam")
     for epoch in tqdm_epoch:
-        for batch in data_loader:
+        for batch, tau in data_loader:
             # Execute one training step
             batch = batch.to(cfg.device)
-            loss = train_step_fn(state, batch)
+            tau = tau.to(cfg.device)
+            loss = train_step_fn(state, batch, tau)
 
         # Print the averaged training loss so far.
         if (epoch+1) % cfg.log.print_interval == 0:
-            tqdm.write(f'epoch: {epoch}\t loss: {loss.item():.5f}')
+            tqdm.write(f'epoch: {epoch+1}\t loss: {loss.item():.5f}')
         if (epoch+1) % cfg.log.save_interval == 0 or (epoch+1) == cfg.training.n_iter:
             save_checkpoint(checkpoint_dir, state, epoch+1)
     print(f"========================== Finished Training ==========================\n")

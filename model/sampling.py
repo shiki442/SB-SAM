@@ -59,6 +59,8 @@ class EulerMaruyamaPredictor(Predictor):
 
 
 def get_em_sampler(cfg, x_init, sde, sampling_eps):
+    n = cfg.sampler.ntrajs // cfg.world_size
+    tau = 0.01 * cfg.dynamics.temperature * torch.ones(n, device=cfg.device)
 
     def Euler_Maruyama_sampler(score):
         score.eval()
@@ -70,11 +72,9 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
         tqdm_bar = tqdm(time_steps, desc="Sampling", mininterval=10, ncols=0)
         with torch.no_grad():
             for time_step in tqdm_bar:
-                t = torch.ones(cfg.sampler.ntrajs//cfg.world_size,
-                               device=cfg.device) * time_step
-
+                t = torch.ones(n, device=cfg.device) * time_step
                 drift, diffusion = sde.sde(x, t)
-                drift = drift - diffusion[:, None, None] ** 2 * score_fn(x, t)
+                drift = drift - diffusion[:, None, None] ** 2 * score_fn(x, t, tau)
                 mean_x = x + drift * dt
                 x = mean_x + torch.sqrt(-dt) * \
                     diffusion[:, None, None] * torch.randn_like(x)
@@ -86,8 +86,9 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
 
 def get_sampling_fn(cfg, sde, sampling_eps):
     x0 = datasets.get_init_pos(cfg)
+    ind = datasets.index_sam(x0, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
     shape = (cfg.sampler.ntrajs//cfg.world_size, cfg.data.d, cfg.data.n)
-    x_init = sde.prior_sampling(shape, x0)
+    x_init = sde.prior_sampling(shape, x0[:,:,ind])
 
     if cfg.sampler.method == 'em':
         return get_em_sampler(cfg, x_init, sde, sampling_eps)

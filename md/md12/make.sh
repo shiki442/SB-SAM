@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -A yangzhijian
-#SBATCH -J MD4
+#SBATCH -J MD_make
 #SBATCH --partition=hpib
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -14,17 +14,16 @@ echo This job runs on the following nodes: $SLURM_JOB_NODELIST
 echo This job has allocated $SLURM_JOB_CPUS_PER_NODE cpu cores.
 
 echo ---------------------------------------------
-echo configuration file: params3d
 echo Time is `date`
 
 module load intel/parallelstudio/2019
 
 cd $SLURM_SUBMIT_DIR
 
-make clean
+make -f Makefile_n12 clean_exe
 
-make
+make -f Makefile_n12
 
-./fe211
+make -f Makefile_n12 clean
 
 echo End at `date`

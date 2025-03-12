@@ -23,10 +23,11 @@ class PdcDataset(Dataset):
 
 
 class SamDataset(Dataset):
-    def __init__(self, x_all, ind_sam=None):
+    def __init__(self, x_all, tau=None, ind_sam=None):
         super().__init__()
         self.x_all = x_all
         self.x_sam = x_all[:, :, ind_sam]
+        self.tau = tau / 100
         self.ind_sam = ind_sam
         self.shape = x_all.shape
         self.mean = torch.mean(self.x_sam, axis=0)
@@ -36,7 +37,7 @@ class SamDataset(Dataset):
         return self.x_all.shape[0]
 
     def __getitem__(self, idx):
-        return self.x_sam[idx]
+        return self.x_sam[idx], self.tau[idx]
 
 # ===================================   Dataset   ============================================================
 
@@ -45,8 +46,8 @@ def get_dataset(cfg):
     if cfg.data.problem == 'quadratic_potential':
         sample_all, ind_sam = quadratic_potential_data(cfg)
     elif cfg.data.problem == 'fe211':
-        sample_all, ind_sam = read_pos_f(cfg)
-    dataset = SamDataset(sample_all, ind_sam)
+        sample_all, tau, ind_sam = read_md_data(cfg)
+    dataset = SamDataset(sample_all, tau, ind_sam)
     return dataset
 
 
@@ -87,11 +88,14 @@ def generate_grid(dim, n, min_val=-0.0, max_val=1.0, mode='pos'):
     return flattened_grid
 
 
-def index_sam(ref_struc, min, max_sam):
-    eps = 1.0e-6
-    mask = (ref_struc >= min-eps) & (ref_struc <= max_sam+eps)
+def index_sam(ref_struc, min_x, max_x, defm):
+    defm_tensor = torch.tensor(defm, device=ref_struc.device)
+    inv_defm = torch.linalg.inv(defm_tensor)
+    ref_struc[0] = inv_defm @ ref_struc[0]
+    eps = 1.0e-4 * (ref_struc[0, 0, 1] - ref_struc[0, 0, 0])
+    mask = (ref_struc >= min_x-eps) & (ref_struc <= max_x-eps)
     mask = mask.all(dim=1)
-    index_sam = torch.nonzero(mask).squeeze()
+    index_sam = torch.nonzero(mask[0]).squeeze()
     return index_sam
 
 
@@ -193,10 +197,9 @@ def get_init_pos(cfg):
         x0 = x_ref_sam.T[None, :]
         return x0
     elif cfg.data.problem == 'fe211':
-        pos = np.loadtxt(cfg.data.data_dir + 'init_pos.dat', dtype=np.float32)
+        pos = np.loadtxt(cfg.data.data_eval_dir + 'init_pos.dat', dtype=np.float32)
         pos = pos.reshape(1, 2*pos.shape[0], cfg.data.d)
         x0 = torch.from_numpy(pos).permute(0, 2, 1)
-        cfg.data.n = x0.shape[2]
         return x0.to(cfg.device)
 
 
@@ -204,7 +207,7 @@ def get_quadra_data_params(cfg):
     x_ref_all = generate_grid(
         cfg.data.d, cfg.data.nx_max, cfg.data.min_grid, cfg.data.max_grid)
     indij_ref = generate_grid(cfg.data.d, cfg.data.nx_max, mode='index')
-    ind_sam = index_sam(x_ref_all, cfg.data.min_sam, cfg.data.max_sam)
+    ind_sam = index_sam(x_ref_all, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
     indij_near = nearest_particles(indij_ref, cfg.dynamics.k_near, cfg.data.d)
     d2V = D2Virial(indij_ref, indij_near, cfg)
     return x_ref_all.to(cfg.device), ind_sam, d2V.to(cfg.device)
@@ -285,22 +288,35 @@ def fe211_md_data(cfg):
     return sample_all, ind_sam
 
 
-def read_pos_f(cfg):
-    data_dir = cfg.data.data_dir
-    data_file = os.path.join(data_dir, 'pos-f.dat')
-    output_file = os.path.join(data_dir, 'fe211_md.pt')
-    if 'fe211_md.pt' in os.listdir(data_dir):
-        sample_all = torch.load(
-            output_file, weights_only=True, map_location=cfg.device)
-    else:
-        data = np.loadtxt(data_file, dtype=np.float32)
-        data = data.reshape(-1, cfg.data.n_max, 2*cfg.data.d)
-        sample_all = torch.from_numpy(
-            data[:, :, :cfg.data.d]).permute(0, 2, 1).to(cfg.device)
-        torch.save(sample_all, output_file)
-    ind_sam = torch.arange(0, sample_all.shape[-1])
+def read_md_data(cfg):
+    all_data = []
+    all_tau = []
+    for subdir in os.listdir(cfg.data.data_dir):
+        data_dir = cfg.data.data_dir
+        data_file = os.path.join(data_dir, subdir, 'pos-f.dat')
+        tau_file = os.path.join(data_dir, subdir, 'total_energy.dat')
+        output_file = os.path.join(data_dir, subdir, 'fe211_md.pt')
+        if 'fe211_md.pt' in os.listdir(os.path.join(data_dir, subdir)):
+            data = torch.load(
+                output_file, weights_only=True, map_location=cfg.device)
+            all_data.append(data['sample_all'])
+            all_tau.append(data['tau'])
+        else:
+            data = np.loadtxt(data_file, dtype=np.float32)
+            data = data.reshape(-1, cfg.data.n_max, 2*cfg.data.d)
+            data = torch.from_numpy(
+                data[:, :, :cfg.data.d]).permute(0, 2, 1).to(cfg.device)
+            tau = np.loadtxt(tau_file, dtype=np.float32)
+            tau = torch.from_numpy(tau[9::10]).to(cfg.device)
+            all_data.append(data)
+            all_tau.append(tau)
+            torch.save({'sample_all': data, 'tau': tau}, output_file)
+        x_ref = get_init_pos(cfg)
+        ind_sam = index_sam(x_ref, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
+    all_data = torch.cat(all_data)
+    all_tau = torch.cat(all_tau)
 
-    return sample_all[:cfg.training.ntrajs], ind_sam
+    return all_data[:cfg.training.ntrajs], all_tau[:cfg.training.ntrajs], ind_sam
 
 
 if __name__ == "__main__":

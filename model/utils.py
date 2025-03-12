@@ -50,11 +50,11 @@ def create_model(config):
 def get_score_fn(sde, model, train):
     """Wraps `score_fn` so that the model output corresponds to a real time-dependent score function."""
 
-    def score_fn(x, t):
+    def score_fn(x, t, tau):
         score = model(x, t)
         std = sde.marginal_prob(torch.zeros_like(x), t)[1]
         score = -score / std[:, None, None]
-        return score
+        return score / tau[:, None, None]
 
     return score_fn
 
