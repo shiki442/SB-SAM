@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -A yangzhijian
-#SBATCH -J MD12-950K
+#SBATCH -J MD-800K
 #SBATCH --partition=pub
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -20,6 +20,11 @@ module load intel/parallelstudio/2019
 
 cd $SLURM_SUBMIT_DIR
 
-./fe211_n12 950.0 ../data12/950K
+# Create output directory
+output_dir="../../SAM_dataset/data12/800K"
+mkdir -p $output_dir
+
+# Run the program with the parameter file
+./fe211 800.0 $output_dir
 
 echo End at `date`

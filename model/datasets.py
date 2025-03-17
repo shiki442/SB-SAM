@@ -27,7 +27,7 @@ class SamDataset(Dataset):
         super().__init__()
         self.x_all = x_all
         self.x_sam = x_all[:, :, ind_sam]
-        self.tau = tau / 100
+        self.tau = tau
         self.ind_sam = ind_sam
         self.shape = x_all.shape
         self.mean = torch.mean(self.x_sam, axis=0)
@@ -42,11 +42,11 @@ class SamDataset(Dataset):
 # ===================================   Dataset   ============================================================
 
 
-def get_dataset(cfg):
+def get_dataset(cfg, mode):
     if cfg.data.problem == 'quadratic_potential':
         sample_all, ind_sam = quadratic_potential_data(cfg)
     elif cfg.data.problem == 'fe211':
-        sample_all, tau, ind_sam = read_md_data(cfg)
+        sample_all, tau, ind_sam = read_md_data(cfg, mode)
     dataset = SamDataset(sample_all, tau, ind_sam)
     return dataset
 
@@ -200,6 +200,8 @@ def get_init_pos(cfg):
         pos = np.loadtxt(cfg.data.data_eval_dir + 'init_pos.dat', dtype=np.float32)
         pos = pos.reshape(1, 2*pos.shape[0], cfg.data.d)
         x0 = torch.from_numpy(pos).permute(0, 2, 1)
+        defm = torch.tensor(cfg.data.defm)
+        x0[0] = defm @ x0[0]
         return x0.to(cfg.device)
 
 
@@ -288,13 +290,19 @@ def fe211_md_data(cfg):
     return sample_all, ind_sam
 
 
-def read_md_data(cfg):
+def read_md_data(cfg, mode='train'):
     all_data = []
     all_tau = []
-    for subdir in os.listdir(cfg.data.data_dir):
+    if mode == 'train':
         data_dir = cfg.data.data_dir
+        data_dir_list = os.listdir(data_dir)
+    elif mode == 'eval':
+        data_dir = ''
+        data_dir_list = [cfg.data.data_eval_dir]
+
+    for subdir in data_dir_list:
         data_file = os.path.join(data_dir, subdir, 'pos-f.dat')
-        tau_file = os.path.join(data_dir, subdir, 'total_energy.dat')
+        params_file = os.path.join(data_dir, subdir, 'data_params.dat')
         output_file = os.path.join(data_dir, subdir, 'fe211_md.pt')
         if 'fe211_md.pt' in os.listdir(os.path.join(data_dir, subdir)):
             data = torch.load(
@@ -306,17 +314,27 @@ def read_md_data(cfg):
             data = data.reshape(-1, cfg.data.n_max, 2*cfg.data.d)
             data = torch.from_numpy(
                 data[:, :, :cfg.data.d]).permute(0, 2, 1).to(cfg.device)
-            tau = np.loadtxt(tau_file, dtype=np.float32)
-            tau = torch.from_numpy(tau[9::10]).to(cfg.device)
+            temperature = read_temperature(params_file)
+            tau = 0.01 * temperature * torch.ones(data.shape[0], device=cfg.device)
             all_data.append(data)
             all_tau.append(tau)
             torch.save({'sample_all': data, 'tau': tau}, output_file)
-        x_ref = get_init_pos(cfg)
-        ind_sam = index_sam(x_ref, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
+    x_ref = get_init_pos(cfg)
+    ind_sam = index_sam(x_ref, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
     all_data = torch.cat(all_data)
     all_tau = torch.cat(all_tau)
 
     return all_data[:cfg.training.ntrajs], all_tau[:cfg.training.ntrajs], ind_sam
+
+
+def read_temperature(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+        # Assuming the 10th line contains the Temperature data
+        temperature_line = lines[9]
+        # Split the line by comma and strip any extra whitespace
+        temperature_value = temperature_line.split(',')[1].strip()
+        return float(temperature_value)
 
 
 if __name__ == "__main__":

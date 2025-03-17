@@ -5,23 +5,28 @@ net:
 
 data:
   cfg_flag: 1
-  # problem: 'quadratic_potential'
-  problem: 'fe211'
-  # crystal: 'SC'
-  crystal: 'BCC'
+  problem: 'quadratic_potential'
+  # problem: 'fe211'
+  crystal: 'SC'
+  # crystal: 'BCC'
   d: 1
   nx_max: 50
+  na: 1
   nx: 5
+  ny:
+  nz:
   n_max:
   n:
-  nf: 
-  grid_step: 0.1
+  nf:
+  defm: 
+  grid_step:
   min_grid: 
   max_grid: 
   min_x: 
   max_x: 
-  data_dir:
-  delete_rawdata:
+  data_dir: '../SAM_dataset/data12/'
+  data_eval_dir: '../SAM_dataset/data12/300K/'
+  delete_rawdata: False
 
 optim:
   optimizer: 'Adam'
@@ -33,7 +38,7 @@ optim:
   grad_clip: -1
 
 model:
-  name: 'Unet'
+  name: 'NCSNpp'
   sigma_min: 0.01
   sigma_max: 0.3
   beta_min: 0.01
@@ -61,14 +66,14 @@ model:
 
 dynamics:
   k0: 3.6
-  temperature: 1.0
+  temperature: 300.0
   k_near: 5
 
 training:
   sde: 'vpsde'
-  ntrajs: 2000
-  batch_size: 128
-  n_iter: 1000
+  ntrajs: 100000
+  batch_size: 2048
+  n_iter: 3000
   initial_step: 0
   continuous: True
   reduce_mean: False
@@ -76,7 +81,7 @@ training:
 
 sampler:
   method: 'em'
-  ntrajs: 1000
+  ntrajs: 10000
   snr: 0.17
 
 log:

@@ -27,7 +27,7 @@ def check_data_config(cfg):
     if data.crystal == 'SC':
         assert data.nx <= data.nx_max
     if data.crystal == 'BCC':
-        data_dir = os.path.join(data.data_eval_dir, 'data_params.txt')
+        data_dir = os.path.join(data.data_eval_dir, 'data_params.dat')
         params = read_params(data_dir)
         data.d = params['ndim']
         data.grid_step = params['a0']
@@ -36,6 +36,7 @@ def check_data_config(cfg):
         data.na = params['na']
         data.nf = params['nf']
         data.defm = params['defm']
+        cfg.dynamics.temperature = params['Temperature']
         assert data.nx <= data.nx_max
     assert cfg.training.batch_size <= cfg.training.ntrajs
     data.n = data.nx ** data.d * data.na
@@ -71,12 +72,12 @@ def read_params(filename):
     return params
 
 
-def check_path_config(cfg, word_dir='./', create_new_file=True):
+def check_path_config(cfg, work_dir='./', create_new_file=True):
     path = cfg.path
     if path.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path.output = os.path.join(
-            word_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_k{cfg.dynamics.k_near}_d{cfg.data.d}/')
+            work_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_k{cfg.dynamics.k_near}_d{cfg.data.d}/')
     path.checkpoints = os.path.join(path.output, "checkpoints")
     path.eval = os.path.join(path.output, "eval")
     path.params = os.path.join(path.output, "params", "config.yml")

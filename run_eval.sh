@@ -1,29 +1,22 @@
 #!/bin/bash
-
 #SBATCH -A yangzhijian
-#SBATCH -J MD_make
-#SBATCH --partition=hpib
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:4
+#SBATCH -J SAM
+#SBATCH -o ./log/job-%j.out
+#SBATCH -p gpu
 #SBATCH --cpus-per-task=1
-#SBATCH -o job-%j.out
-#SBATCH -e job-%j.err
+#SBATCH --ntasks=2
+
+RUN_PATH="."
+cd "$RUN_PATH" || exit 1
 
 echo Directory is $PWD
 echo This job runs on the following nodes: $SLURM_JOB_NODELIST
 echo This job has allocated $SLURM_JOB_CPUS_PER_NODE cpu cores.
 
 echo ---------------------------------------------
+echo configuration file: params3d
 echo Time is `date`
 
-module load intel/parallelstudio/2019
-
-cd $SLURM_SUBMIT_DIR
-
-make -f Makefile_n12 clean_exe
-
-make -f Makefile_n12
-
-make -f Makefile_n12 clean
-
+/project/songpengcheng/miniconda3/envs/torch/bin/python -u eval.py
 echo End at `date`

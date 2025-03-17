@@ -59,7 +59,10 @@ class EulerMaruyamaPredictor(Predictor):
 
 
 def get_em_sampler(cfg, x_init, sde, sampling_eps):
-    n = cfg.sampler.ntrajs // cfg.world_size
+    if cfg.world_size > 1:
+        n = cfg.sampler.ntrajs // cfg.world_size
+    else:
+        n = cfg.sampler.ntrajs
     tau = 0.01 * cfg.dynamics.temperature * torch.ones(n, device=cfg.device)
 
     def Euler_Maruyama_sampler(score):
@@ -69,7 +72,7 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
         time_steps = torch.linspace(1., sampling_eps, sde.N, device=cfg.device)
         dt = time_steps[1] - time_steps[0]
         x = x_init
-        tqdm_bar = tqdm(time_steps, desc="Sampling", mininterval=10, ncols=0)
+        tqdm_bar = tqdm(time_steps, desc="Sampling", mininterval=2, ncols=0)
         with torch.no_grad():
             for time_step in tqdm_bar:
                 t = torch.ones(n, device=cfg.device) * time_step

@@ -5,7 +5,7 @@ MODULE CMM_PARMS
   PUBLIC
   
   ! -- SYSTEM SIZE
-  INTEGER, PARAMETER :: NX=12, NY=12, NZ=12, NA=2, NMAX=NX*NY*NZ*NA
+  INTEGER, PARAMETER :: NX=6, NY=6, NZ=6, NA=2, NMAX=NX*NY*NZ*NA
   INTEGER, PARAMETER :: NDIM=3
 
   ! -- TOTAL NUMBER OF DEGREES OF FREEDOM
@@ -30,12 +30,12 @@ MODULE CMM_PARMS
   REAL(8) :: KT, Temperature
   REAL(8) :: time_begin, time_end, time_run
   character(len=100) :: output_dir
-
 contains
 
   subroutine set_temp(tmp)
     implicit none
     real(8) :: tmp
+    Temperature = tmp
     KT = tmp / EV_D_KB
   end subroutine set_temp
 
@@ -44,14 +44,29 @@ contains
     character(len=100) :: arg1, arg2
     real(8) :: tmp
 
-    ! 获取命令行参数
     call get_command_argument(1, arg1)
     call get_command_argument(2, arg2)
     read(arg1, *) tmp
     output_dir = trim(adjustl(arg2))
 
-    ! 设置温度
     call set_temp(tmp)
   end subroutine get_command_line_args
+
+  subroutine save_params()
+    open(50, file=trim(output_dir)//'/data_params.txt', position='append')
+
+    write(50, *) 'num_atoms,', nmax
+    write(50, *) 'nx,', nx
+    write(50, *) 'ny,', ny
+    write(50, *) 'nz,', nz
+    write(50, *) 'na,', na
+    write(50, *) 'nf,', nf
+    write(50, *) 'ndim,', ndim
+    write(50, *) 'a0,', a0
+    write(50, *) 'KT,', KT
+    write(50, *) 'Temperature,', Temperature
+
+    close(50)
+  end subroutine
 
 END MODULE CMM_PARMS

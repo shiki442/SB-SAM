@@ -5,7 +5,7 @@ import sys
 import os
 import math
 
-from model.datasets import process_data
+from model.datasets import process_data, get_dataset
 import matplotlib.pyplot as plt
 
 sys.path.append("..")
@@ -61,7 +61,8 @@ def get_score_fn(sde, model, train):
 # ==========================   evaluate   ==========================
 
 
-def get_evaluate_fn(cfg, dataset, save_eval=True):
+def get_evaluate_fn(cfg, save_eval=True):
+    dataset = get_dataset(cfg, mode='eval')
     mean_true = dataset.mean
     std_true = dataset.std
     x_true = dataset.x_sam
@@ -91,6 +92,8 @@ def get_evaluate_fn(cfg, dataset, save_eval=True):
 
             create_and_save_hist(
                 x_pred[:, 0, 1], x_true[:, 0, 1], cfg.path.eval)
+            create_and_save_hist2d(
+                x_pred[:, 0:2, 1], x_true[:, 0:2, 1], cfg.path.eval)
             create_and_save_rdf(x_pred, x_true, cfg.path.eval, cfg.data.grid_step)
         return V_pred
 
@@ -151,7 +154,31 @@ def create_and_save_hist(x_pred, x_true, path):
     plt.close()
 
 
+def create_and_save_hist2d(x_pred, x_true, path):
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, sharex=True, sharey=True, figsize=(10, 5))
+    
+    axes[0].hist2d(x_pred[:, 0].cpu().numpy(), x_pred[:, 1].cpu().numpy(), bins=50, cmap='Blues')
+    axes[0].set_title('Predicted Data')
+    axes[0].set_xlabel('X axis')
+    axes[0].set_ylabel('Y axis')
+    
+    axes[1].hist2d(x_true[:, 0].cpu().numpy(), x_true[:, 1].cpu().numpy(), bins=50, cmap='Blues')
+    axes[1].set_title('True Data')
+    axes[1].set_xlabel('X axis')
+    axes[1].set_ylabel('Y axis')
+    
+    fig.colorbar(axes[0].collections[0], ax=axes[0], label='Counts')
+    fig.colorbar(axes[1].collections[0], ax=axes[1], label='Counts')
+    
+    path = os.path.join(path, 'hist2d.png')
+    plt.savefig(path)
+    plt.close()
+
+
 def compute_rdf(positions, box_size, r_max, r_min, bin_width):
+    x0 = torch.mean(positions[:,:,0], dim=0)
+    positions = positions - x0[None, :, None]
     num_bins = int(r_max / bin_width)
     num_bins = num_bins + 1 if math.modf(r_max / bin_width)[0] > 0.99 else num_bins
     num_bins_cutoff = int(r_min / bin_width)
