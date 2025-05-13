@@ -12,7 +12,7 @@ data:
   d:
   nx_max:
   na: 1
-  nx: 6
+  nx: 4
   ny:
   nz:
   n_max:
@@ -24,8 +24,8 @@ data:
   max_grid: 
   min_x: 
   max_x: 
-  data_dir: '../SAM_dataset/data12/'
-  data_eval_dir: '../SAM_dataset/data12/300K/'
+  train_data_dir: '../SAM_dataset/data12/'
+  eval_data_dir: '../SAM_dataset/data12/500_02/'
   delete_rawdata: False
 
 optim:
@@ -39,6 +39,7 @@ optim:
 
 model:
   name: 'NCSNpp'
+  cond_dim: 3
   sigma_min: 0.01
   sigma_max: 0.3
   beta_min: 0.01
@@ -66,7 +67,6 @@ model:
 
 dynamics:
   k0: 3.6
-  temperature: 300.0
   k_near: 5
 
 training:
@@ -94,3 +94,8 @@ path:
   checkpoints:
   eval:
   params:
+
+eval:
+  temperature: 300.0
+  stress_cond: '02'
+  cond: '300_02'

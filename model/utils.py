@@ -50,11 +50,11 @@ def create_model(config):
 def get_score_fn(sde, model, train):
     """Wraps `score_fn` so that the model output corresponds to a real time-dependent score function."""
 
-    def score_fn(x, t, tau):
-        score = model(x, t)
+    def score_fn(x, t, cond):
+        score = model(x, t, cond)
         std = sde.marginal_prob(torch.zeros_like(x), t)[1]
         score = -score / std[:, None, None]
-        return score / tau[:, None, None]
+        return score / cond[:, 0:1, None]
 
     return score_fn
 
@@ -157,7 +157,8 @@ def create_and_save_hist(x_pred, x_true, path):
 def create_and_save_hist2d(x_pred, x_true, path):
     fig, axes = plt.subplots(
         nrows=1, ncols=2, sharex=True, sharey=True, figsize=(10, 5))
-    
+    x_pred = x_pred.reshape(-1, 2)
+    x_true = x_true.reshape(-1, 2)
     axes[0].hist2d(x_pred[:, 0].cpu().numpy(), x_pred[:, 1].cpu().numpy(), bins=50, cmap='Blues')
     axes[0].set_title('Predicted Data')
     axes[0].set_xlabel('X axis')
@@ -208,7 +209,7 @@ def compute_rdf(positions, box_size, r_max, r_min, bin_width):
 
 
 def create_and_save_rdf(x_pred, x_true, path, a0):
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(15, 5))
     r_values, g_r = compute_rdf(x_pred, 6*a0, 6*a0, 0.5*a0, a0/64)
     r_values_true, g_r_true = compute_rdf(x_true, 6*a0, 6*a0, 0.5*a0, a0/64)
 
@@ -221,7 +222,8 @@ def create_and_save_rdf(x_pred, x_true, path, a0):
     ax.set_xticks(xticks)
     ax.set_xticklabels(xtick_labels)
     ax.legend()
-    
+    ax.set_xlim(0.*a0, 4*a0)
+
     path = os.path.join(path, 'rdf.png')
     plt.savefig(path)
     plt.close()

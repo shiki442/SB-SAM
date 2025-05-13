@@ -1,7 +1,8 @@
 import torch.multiprocessing as mp
 import os
-from config import config
+
 from model.train import evaluate_model
+from config import config
 
 os.environ['MASTER_ADDR'] = '127.0.0.1'
 os.environ['MASTER_PORT'] = '64060'
@@ -28,8 +29,8 @@ def main(cfg):
 if __name__ == "__main__":
     cfg = config.load_config(path_param)
     cfg.path.output = dir_path
-    cfg.data.data_eval_dir = '../SAM_dataset/data12/300K/'
-    config.check_config(cfg, save_cfg=False, check_path=False)
-    config.check_path_config(cfg, create_new_file=False)
-    print(cfg.dynamics.temperature)
+    cfg.data.eval_data_dir = '../SAM_dataset/data12/300_02/'
+    cfg.eval.cond = '300_02'
+    config.check_config(cfg, save_cfg=False, mode='eval')
     main(cfg)
+

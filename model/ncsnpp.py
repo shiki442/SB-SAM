@@ -22,6 +22,7 @@ class NCSNpp(nn.Module):
         self.cfg = cfg
         self.act = act = get_act(cfg)
         self.nf = nf = cfg.model.nf
+        self.cond_dim = cfg.model.cond_dim
         ch_mult = cfg.model.ch_mult
         dropout = cfg.model.dropout
         resamp_with_conv = cfg.model.resamp_with_conv
@@ -32,7 +33,7 @@ class NCSNpp(nn.Module):
         self.all_resolutions = all_resolutions = [
             cfg.data.n // (2 ** i) for i in range(num_resolutions)]
 
-        self.conditional = conditional = cfg.model.conditional  # noise-conditional
+        self.condition_on_t = condition_on_t = cfg.model.conditional  # noise-conditional
         fir = cfg.model.fir
         fir_kernel = cfg.model.fir_kernel
         # self.skip_rescale = skip_rescale = cfg.model.skip_rescale
@@ -48,6 +49,8 @@ class NCSNpp(nn.Module):
 
         modules = []
         out_padding = []
+
+
         # timestep/noise_level embedding; only for continuous training
         if embedding_type == 'fourier':
             # Gaussian Fourier features embeddings.
@@ -57,8 +60,13 @@ class NCSNpp(nn.Module):
                 embedding_size=nf, scale=cfg.model.fourier_scale
             ))
             embed_dim = 2 * nf
+        
+        if self.cond_dim > 0:
+            modules.append(nn.Linear(in_features=self.cond_dim, out_features=embed_dim))
+            modules[-1].weight.data = default_initializer()(modules[-1].weight.shape)
+            nn.init.zeros_(modules[-1].bias)
 
-        if conditional:  # 是否使用条件信息
+        if condition_on_t:  # 是否使用条件信息
             modules.append(nn.Linear(embed_dim, nf * 4))
             # 将刚加入的线性层初始化
             modules[-1].weight.data = default_initializer()(modules[-1].weight.shape)
@@ -205,17 +213,22 @@ class NCSNpp(nn.Module):
                     # modules.append(ResnetBlock(in_ch=in_ch, up=True))
         self.all_modules = nn.ModuleList(modules)
 
-    def forward(self, x, time_cond, stress_cond=None):
+    def forward(self, x, t, cond=None):
         # Obtain the Gaussian random feature embedding for t
         modules = self.all_modules
         m_idx = 0
         if self.embedding_type == 'fourier':
             # Gaussian Fourier features embeddings.
-            used_sigmas = time_cond
+            used_sigmas = t
             temb = modules[m_idx](torch.log(used_sigmas))
             m_idx += 1
 
-        if self.conditional:
+        if self.cond_dim > 0:
+            cemb = cond
+            temb = temb + modules[m_idx](cemb)
+            m_idx += 1
+
+        if self.condition_on_t:
             temb = modules[m_idx](temb)
             m_idx += 1
             temb = modules[m_idx](self.act(temb))

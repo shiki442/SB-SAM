@@ -27,7 +27,7 @@ def check_data_config(cfg):
     if data.crystal == 'SC':
         assert data.nx <= data.nx_max
     if data.crystal == 'BCC':
-        data_dir = os.path.join(data.data_eval_dir, 'data_params.dat')
+        data_dir = os.path.join(data.eval_data_dir, 'data_params.dat')
         params = read_params(data_dir)
         data.d = params['ndim']
         data.grid_step = params['a0']
@@ -36,7 +36,6 @@ def check_data_config(cfg):
         data.na = params['na']
         data.nf = params['nf']
         data.defm = params['defm']
-        cfg.dynamics.temperature = params['Temperature']
         assert data.nx <= data.nx_max
     assert cfg.training.batch_size <= cfg.training.ntrajs
     data.n = data.nx ** data.d * data.na
@@ -72,15 +71,16 @@ def read_params(filename):
     return params
 
 
-def check_path_config(cfg, work_dir='./', create_new_file=True):
+def check_path_config(cfg, work_dir='./', mode='train'):
     path = cfg.path
     if path.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path.output = os.path.join(
-            work_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_k{cfg.dynamics.k_near}_d{cfg.data.d}/')
+            work_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_d{cfg.data.d}/')
     path.checkpoints = os.path.join(path.output, "checkpoints")
-    path.eval = os.path.join(path.output, "eval")
     path.params = os.path.join(path.output, "params", "config.yml")
+    if mode == 'eval':
+        path.eval = os.path.join(path.output, f"eval_{cfg.eval.cond}")
 
     os.makedirs(path.output, exist_ok=True)
     os.makedirs(path.checkpoints, exist_ok=True)
@@ -117,13 +117,12 @@ def generate_params():
         yield {'k_nearest': k, 'n': n}
 
 
-def check_config(cfg, params_iter=None, save_cfg=True, check_path=True):
+def check_config(cfg, params_iter=None, save_cfg=True, mode='train'):
     if params_iter is not None:
         cfg.dynamics.k_near = params_iter['k_nearest']
         cfg.data.nx = params_iter['n']
     check_data_config(cfg)
-    if check_path:
-        check_path_config(cfg)
+    check_path_config(cfg, mode=mode)
     if save_cfg:
         save_config(cfg)
     check_device_config(cfg)

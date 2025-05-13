@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -A yangzhijian
-#SBATCH -J MD-900K
+#SBATCH -J MD-300K
 #SBATCH --partition=pub
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -25,11 +25,18 @@ make clean_exe
 make
 make clean
 
-# Create output directory
-output_dir="../../SAM_dataset/data12/900K"
-mkdir -p $output_dir
-
 # Run the program with the parameter file
-./fe211 900.0 $output_dir
+# while IFS= read -r line; do
+#     read -a ARGS <<< "$line"
+#     mkdir -p "${ARGS[0]}"
+#     ./fe211 "${ARGS[@]}"
+# done < args.txt
+
+# Read the specified line from args.txt
+LINE_NUM=1
+line=$(sed -n "${LINE_NUM}p" args.txt)
+read -a ARGS <<< $line
+mkdir -p "${ARGS[0]}"
+./fe211 ${ARGS[@]}
 
 echo End at `date`

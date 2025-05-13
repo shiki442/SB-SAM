@@ -80,22 +80,25 @@ contains
 
     ! -- total number of steps; number of steps for equilibration; 
     ! -- number of samples in time
-    integer, parameter :: nstep= 2000   ! 1000
-    integer, parameter :: nequi= 100000   ! 2000
-    integer, parameter :: nsf=10, nsamp= (nequi)/nsf
+    integer, parameter :: nstep=2000   ! 1000
+    integer, parameter :: nsf=10
+    integer :: nequi
     
     ! -- sampled stress
     real(8) :: sigv1(3,3),sigv2(3,3),hist(nsamp,3,3)
     integer :: ntime, n
 
+    call get_command_line_args
+
+    nequi = nsamp * nsf
+
     dgrad =  defm
     stress = 0d0
 
-    call get_command_line_args
     call save_params
-    open(10, file=trim(output_dir)//'/total_energy.dat')
+   !  open(10, file=trim(output_dir)//'/total_energy.dat')
     open(11, file=trim(output_dir)//'/stress.dat')
-    open(15, file=trim(output_dir)//'/data_params.txt', position='append')
+    open(15, file=trim(output_dir)//'/data_params.dat', position='append')
 
     write(15, *) 'nsample,', nsamp
     write(15, *) 'defm,'
@@ -124,7 +127,6 @@ contains
    enddo       
 
     do n=1,nequi
-
        call INTG_NHC
        call INTG_NVE
        call INTG_NHC
@@ -140,8 +142,8 @@ contains
         !  hist(ntime,:,:)= sigV1
         !  write(11,'(6E16.8)') sigv1(1,1), hist(ntime,1,2), hist(ntime,1,1)     
           call save_data
+         !  call save_cond
        end if
-
     end do
     !stress= sum(hist,1)/dble(nsamp)
         
@@ -798,6 +800,22 @@ SUBROUTINE INIT_NHC
 
   end subroutine save_data
 
+!  subroutine save_cond
+
+!   implicit none
+!   integer :: i, j
+
+!   open(16, file=trim(output_dir)//'/cond.dat', position='append')
+
+!   ! Write temperature and deformation gradient to the file in one line
+!   write(16, '(E20.10, 9E20.10)') temperature, ((defm(i, j), i = 1, 3), j = 1, 3)
+
+!   close(16)
+
+!   return
+
+! end subroutine save_cond
+
  subroutine save_init_pos
 
     implicit none
@@ -812,7 +830,7 @@ SUBROUTINE INIT_NHC
 
     return
 
-  end subroutine save_init_pos
+ end subroutine save_init_pos
 
   function num2str(num) result(str)
    !  integer, intent(in) :: num

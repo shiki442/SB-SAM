@@ -25,7 +25,7 @@ data:
   min_x: 
   max_x: 
   data_dir: '../SAM_dataset/data12/'
-  data_eval_dir: '../SAM_dataset/data12/300K/'
+  eval_data_dir: '../SAM_dataset/data12/300K/'
   delete_rawdata: False
 
 optim:

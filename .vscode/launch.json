@@ -20,7 +20,6 @@
             "program": "eval.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            // "args": ["--config=./config/params3d.yml"]
         }
     ],
     "python.formatting.provider": "autopep8",

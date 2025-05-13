@@ -63,7 +63,11 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
         n = cfg.sampler.ntrajs // cfg.world_size
     else:
         n = cfg.sampler.ntrajs
-    tau = 0.01 * cfg.dynamics.temperature * torch.ones(n, device=cfg.device)
+    tau = 0.01 * torch.tensor(cfg.eval.temperature, device=cfg.device)
+    tau = tau.unsqueeze_(0).repeat(n, 1)
+    stress = torch.tensor(cfg.data.defm[0][0:2], device=cfg.device)
+    stress = stress.unsqueeze_(0).repeat(n, 1)
+    cond = torch.cat((tau, stress), dim=1)
 
     def Euler_Maruyama_sampler(score):
         score.eval()
@@ -77,7 +81,7 @@ def get_em_sampler(cfg, x_init, sde, sampling_eps):
             for time_step in tqdm_bar:
                 t = torch.ones(n, device=cfg.device) * time_step
                 drift, diffusion = sde.sde(x, t)
-                drift = drift - diffusion[:, None, None] ** 2 * score_fn(x, t, tau)
+                drift = drift - diffusion[:, None, None] ** 2 * score_fn(x, t, cond)
                 mean_x = x + drift * dt
                 x = mean_x + torch.sqrt(-dt) * \
                     diffusion[:, None, None] * torch.randn_like(x)

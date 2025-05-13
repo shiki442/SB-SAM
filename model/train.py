@@ -80,10 +80,10 @@ def train_model(rank, cfg):
     for epoch in range(initial_step, cfg.training.n_iter):
         if rank is not None:
             sampler.set_epoch(epoch)
-        for batch, tau in data_loader:
+        for batch, cond in data_loader:
             batch = batch.to(rank if rank is not None else cfg.device)
-            tau = tau.to(rank if rank is not None else cfg.device)
-            loss = train_step_fn(state, batch, tau)
+            cond = cond.to(rank if rank is not None else cfg.device)
+            loss = train_step_fn(state, batch, cond)
 
         if rank is None or rank == 0:
             if (epoch+1) % cfg.log.print_interval == 0:

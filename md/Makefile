@@ -16,10 +16,10 @@ cell.o   : cmm_parms.o
 
 .PHONY : clean clean_exe clean_all
 clean:
-	rm -f *.o *.mod *.MOD *~ *.dat *.txt
+	rm -f *.o *.mod *.MOD *~ *.dat
 
 clean_exe:
 	rm -f $(EXE)
 
 clean_all:
-	rm -f *.o *.mod *.MOD *~ *.dat *.txt $(EXE)
+	rm -f *.o *.mod *.MOD *~ *.dat $(EXE)
