@@ -5,7 +5,7 @@
 #SBATCH --partition=pub
 #SBATCH --output job-%A_%a.out
 #SBATCH --error job-%A_%a.err
-#SBATCH --array=1-30%8
+#SBATCH --array=1-27%8
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 

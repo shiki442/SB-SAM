@@ -61,19 +61,11 @@ class NCSNpp(nn.Module):
             ))
             embed_dim = 2 * nf
         
-        if self.cond_dim > 0:
-            modules.append(nn.Linear(in_features=self.cond_dim, out_features=embed_dim))
-            modules[-1].weight.data = default_initializer()(modules[-1].weight.shape)
-            nn.init.zeros_(modules[-1].bias)
+        if condition_on_t:
+            modules.append(layerspp.Conditioner(in_dim=embed_dim, embed_dim=nf * 4, act=act, cond_drop_prob=0.0))
 
-        if condition_on_t:  # 是否使用条件信息
-            modules.append(nn.Linear(embed_dim, nf * 4))
-            # 将刚加入的线性层初始化
-            modules[-1].weight.data = default_initializer()(modules[-1].weight.shape)
-            nn.init.zeros_(modules[-1].bias)
-            modules.append(nn.Linear(nf * 4, nf * 4))
-            modules[-1].weight.data = default_initializer()(modules[-1].weight.shape)
-            nn.init.zeros_(modules[-1].bias)
+        if self.cond_dim > 0:
+            modules.append(layerspp.Conditioner(in_dim=self.cond_dim, embed_dim=nf * 4, act=act, batch_norm=True))
 
         Combiner = functools.partial(Combine, method=combine_method)
 
@@ -223,18 +215,18 @@ class NCSNpp(nn.Module):
             temb = modules[m_idx](torch.log(used_sigmas))
             m_idx += 1
 
-        if self.cond_dim > 0:
-            cemb = cond
-            temb = temb + modules[m_idx](cemb)
-            m_idx += 1
-
         if self.condition_on_t:
             temb = modules[m_idx](temb)
             m_idx += 1
-            temb = modules[m_idx](self.act(temb))
-            m_idx += 1
         else:
             temb = None
+
+        if cond is not None and self.cond_dim > 0:
+            temb = temb + modules[m_idx](cond)
+            m_idx += 1
+        elif self.cond_dim > 0:
+            # If no condition is provided, we don't need to pass through the conditioner
+            m_idx += 1
 
         hs = [modules[m_idx](x)]
         m_idx += 1

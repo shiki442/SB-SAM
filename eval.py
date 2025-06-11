@@ -10,7 +10,7 @@ os.environ['MASTER_PORT'] = '64060'
 dir_paths = os.path.join('./output')
 
 dir_paths = os.listdir(dir_paths)
-dir_path = dir_paths[-1]
+dir_path = '20250530_000842_N3456_n128_d3'
 
 print(dir_path)
 
@@ -29,8 +29,8 @@ def main(cfg):
 if __name__ == "__main__":
     cfg = config.load_config(path_param)
     cfg.path.output = dir_path
-    cfg.data.eval_data_dir = '../SAM_dataset/data12/300_02/'
-    cfg.eval.cond = '300_02'
+    cfg.eval.cond = '450_01'
+    cfg.data.eval_data_dir = f'../SAM_dataset/evaldata/{cfg.eval.cond}/'
     config.check_config(cfg, save_cfg=False, mode='eval')
     main(cfg)
 

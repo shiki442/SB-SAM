@@ -1,1 +1,13 @@
 md.f90 save_cond函数注释
+
+
+改进方向：
+e1,e2的尺度
+dropout等机制
+Classifier-free Guidance
+score是否除以T
+
+后续工作：
+stress的计算
+dynamic模拟
+论文撰写

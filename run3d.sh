@@ -3,6 +3,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH -J SAM
 #SBATCH -o ./log/job-%j.out
+#SBATCH -e ./log/job-%j.err
 #SBATCH -p gpu
 #SBATCH --cpus-per-task=1
 #SBATCH --ntasks=2

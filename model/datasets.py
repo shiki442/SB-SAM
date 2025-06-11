@@ -9,9 +9,11 @@ from pathlib import Path
 
 
 class PdcDataset(Dataset):
-    def __init__(self, x_all):
+    def __init__(self, x_all, cond=None):
         super().__init__()
         self.x_all = x_all
+        self.cond = cond[:,:3]
+        self.shape = x_all.shape
         self.mean = torch.mean(self.x_all, axis=0)
         self.std = torch.std(self.x_all, axis=0)
 
@@ -19,7 +21,7 @@ class PdcDataset(Dataset):
         return self.x_all.shape[0]
 
     def __getitem__(self, idx):
-        return torch.flatten(self.x_all[idx], start_dim=-2)
+        return self.x_sam[idx], self.cond[idx]
 
 
 class SamDataset(Dataset):
@@ -44,7 +46,7 @@ class SamDataset(Dataset):
 
 def get_dataset(cfg, mode):
     if cfg.data.problem == 'quadratic_potential':
-        sample_all, ind_sam = quadratic_potential_data(cfg)
+        sample_all, cond, ind_sam = quadratic_potential_data(cfg)
     elif cfg.data.problem == 'fe211':
         sample_all, cond, ind_sam = read_md_data(cfg, mode)
     dataset = SamDataset(sample_all, cond, ind_sam)
@@ -52,20 +54,20 @@ def get_dataset(cfg, mode):
 
 
 def get_pdc_dataset(cfg):
-    sample_all = generate_pdc_data(cfg)
-    dataset = PdcDataset(sample_all)
+    sample_all, cond = quadratic_potential_pdc_data(cfg)
+    dataset = PdcDataset(sample_all, cond)
     return dataset
 
 
 def generate_gauss_data(mean, d2V, cfg):
     d = cfg.data.d
     T = cfg.eval.temperature
-    x_all = torch.empty([cfg.training.ntrajs, d, mean.shape[0]])
+    x_all = torch.empty([cfg.training.ntrajs, d, mean.shape[1]])
     # mean = torch.zeros_like(mean)
     cov = torch.empty_like(d2V)
     for i in range(d):
         cov[i] = T/2*torch.linalg.inv(d2V[i])
-        sampler = torch.distributions.MultivariateNormal(mean[:, i], cov[i])
+        sampler = torch.distributions.MultivariateNormal(mean[i], cov[i])
         x_all[:, i, :] = sampler.sample((cfg.training.ntrajs, ))
     return x_all
 
@@ -88,13 +90,36 @@ def generate_grid(dim, n, min_val=-0.0, max_val=1.0, mode='pos'):
     return flattened_grid
 
 
-def index_sam(ref_struc, min_x, max_x, defm):
-    defm_tensor = torch.tensor(defm, device=ref_struc.device)
+def index_sam(ref_struc, min_x, max_x, defm=None):
+    """
+    Get the indices of the points in the reference structure that are within a specified range.
+    Args:
+        ref_struc (torch.Tensor): The reference structure.
+        min_x (float): The minimum x-coordinate of the region.
+        max_x (float): The maximum x-coordinate of the region.
+        defm (np.ndarray): The deformation matrix to be applied to the reference structure.
+    
+    Returns:
+        index_sam (torch.Tensor): The indices of the points in the reference structure that are within the specified range.
+    """
+    if defm is None:
+        defm_tensor = torch.eye(ref_struc.shape[1])
+    else:
+        defm_tensor = torch.tensor(defm, device=ref_struc.device)
     inv_defm = torch.linalg.inv(defm_tensor)
+    # 将完美晶格的坐标转换为无形变下的完美晶格坐标
     ref_struc[0] = inv_defm @ ref_struc[0]
+
     eps = 1.0e-4 * (ref_struc[0, 0, 1] - ref_struc[0, 0, 0])
+    # 利用掩码实现，在区域内的点为True
+    # 区域为[min_x, max_x)
     mask = (ref_struc >= min_x-eps) & (ref_struc <= max_x-eps)
+    # 区域为[min_x, max_x]
+    # mask = (ref_struc >= min_x-eps) & (ref_struc <= max_x+eps)
+
+    # 取得每一个维度都满足条件的点
     mask = mask.all(dim=1)
+    # 获取满足条件的点的索引，squeeze()将多余的维度去掉
     index_sam = torch.nonzero(mask[0]).squeeze()
     return index_sam
 
@@ -190,36 +215,53 @@ def process_data(x_pred, x_ref_sam, cfg):
     return x_pred
 
 
-def get_init_pos(cfg):
+def get_condition(cfg, n):
+    tau = 0.01 * torch.tensor(cfg.eval.temperature, device=cfg.device)
+    tau = tau.unsqueeze_(0).repeat(n, 1)
+    stress = torch.tensor(cfg.data.defm, device=cfg.device)
+    stress = 100 * (stress - torch.eye(3,3, device=stress.device))
+    stress = stress[0, 0:cfg.model.cond_dim-1].repeat(n, 1)
+    cond = torch.cat((tau, stress), dim=1)
+    return cond
+
+
+def get_init_pos(cfg, mode='train'):
     if cfg.data.problem == 'quadratic_potential':
-        x_ref_all, ind_sam, _ = get_quadra_data_params(cfg)
-        x_ref_sam = x_ref_all[ind_sam]
-        x0 = x_ref_sam.T[None, :]
-        return x0
+        x0, ind_sam, _ = get_quadra_data_params(cfg)
+        # x_ref_sam = x_ref_all[ind_sam]
+        # x0 = x_ref_sam.T[None, :]
+        # return x0
     elif cfg.data.problem == 'fe211':
-        pos = np.loadtxt(cfg.data.eval_data_dir + 'init_pos.dat', dtype=np.float32)
+        if mode == 'train':
+            pos_path = os.path.join(cfg.data.train_params_dir, 'init_pos.dat')
+        elif mode == 'eval':
+            pos_path = os.path.join(cfg.data.eval_data_dir, 'init_pos.dat')
+        else:
+            raise ValueError(f"Mode {mode} not recognized.")
+        pos = np.loadtxt(pos_path, dtype=np.float32)
         pos = pos.reshape(1, 2*pos.shape[0], cfg.data.d)
         x0 = torch.from_numpy(pos).permute(0, 2, 1)
-        defm = torch.tensor(cfg.data.defm)
-        x0[0] = defm @ x0[0]
-        return x0.to(cfg.device)
+    defm = torch.tensor(cfg.data.defm)
+    x0[0] = defm @ x0[0]
+    return x0.to(cfg.device)
 
 
 def get_quadra_data_params(cfg):
-    x_ref_all = generate_grid(
+    x0 = generate_grid(
         cfg.data.d, cfg.data.nx_max, cfg.data.min_grid, cfg.data.max_grid)
+    x0 = x0.unsqueeze(0).permute(0, 2, 1)
     indij_ref = generate_grid(cfg.data.d, cfg.data.nx_max, mode='index')
-    ind_sam = index_sam(x_ref_all, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
+    ind_sam = index_sam(x0, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
     indij_near = nearest_particles(indij_ref, cfg.dynamics.k_near, cfg.data.d)
     d2V = D2Virial(indij_ref, indij_near, cfg)
-    return x_ref_all.to(cfg.device), ind_sam, d2V.to(cfg.device)
+    return x0, ind_sam, d2V.to(x0.device)
 
 
 def get_eq_quadra_data_params(cfg):
-    x_ref_all, ind_sam, d2V = get_quadra_data_params(cfg)
-    x_ref_sam = x_ref_all[ind_sam]
+    x0, ind_sam, d2V = get_quadra_data_params(cfg)
+    x0_sam = x0[:,:,ind_sam]
     d2V_eq = eq_D2Virial(d2V, ind_sam, cfg.data.d)
-    return x_ref_sam, d2V_eq.to(cfg.device)
+    return x0_sam, d2V_eq.to(x0_sam.device)
 
 
 def quadratic_potential_data(cfg):
@@ -228,42 +270,45 @@ def quadratic_potential_data(cfg):
         print(f"========================== Starting data generation ==========================")
         start_time = time.time()
 
-    x_ref_all, ind_sam, d2V = get_quadra_data_params(cfg)
-    sample_all = generate_gauss_data(x_ref_all, d2V, cfg)
+    x0, ind_sam, d2V = get_quadra_data_params(cfg)
+    all_data = generate_gauss_data(x0[0], d2V, cfg)
+    cond = get_condition(cfg, all_data.shape[0])
+    
     if cfg.log.verbose:
         end_time = time.time()
-        print(f"Dataset Size: {sample_all.shape}")
+        print(f"Dataset Size: {all_data.shape}")
         print(f"Dim: {cfg.data.d}")
         print(f"Num of Total Particles: {cfg.data.n_max}")
         print(f"Num of SB-SAM Particles: {cfg.data.n}")
         print(f"Total time = {(end_time-start_time)/60.:.5f}m")
         print(f"========================== Finished data generation  ==========================\n")
 
-    return sample_all.to(cfg.device), ind_sam
+    return all_data, cond, ind_sam.to(all_data.device)
 
 
-def generate_pdc_data(cfg):
+def quadratic_potential_pdc_data(cfg):
     """Generate a dataset from the example problem."""
     if cfg.log.verbose:
         print(f"========================== Starting data generation ==========================")
         start_time = time.time()
 
-    x_ref_all, d2V_eq = get_eq_quadra_data_params(cfg)
-    sample_all = generate_gauss_data(x_ref_all, d2V_eq, cfg)
+    x0, d2V_eq = get_eq_quadra_data_params(cfg)
+    all_data = generate_gauss_data(x0[0], d2V_eq, cfg)
+    cond = get_condition(cfg, all_data.shape[0])
 
     if cfg.log.verbose:
         end_time = time.time()
-        print(f"Dataset Size: {sample_all.shape}")
+        print(f"Dataset Size: {all_data.shape}")
         print(f"Dim: {cfg.data.d}")
         print(f"Num of Total Particles: {cfg.data.n_max}")
         print(f"Total time = {(end_time-start_time)/60.:.5f}m")
         print(f"========================== Finished data generation  ==========================\n")
 
-    return sample_all.to(cfg.device)
+    return all_data, cond
 
 
 def fe211_md_data(cfg):
-    data_dir = cfg.data.train_data_dir
+    data_dir = cfg.data.train_data_dirs
     output_file = os.path.join(data_dir, 'fe211_md.pt')
     if 'fe211_md.pt' in os.listdir(data_dir):
         sample_all = torch.load(
@@ -291,47 +336,53 @@ def fe211_md_data(cfg):
 
 
 def read_md_data(cfg, mode='train'):
-    all_data = []
-    all_cond = []
     if mode == 'train':
-        data_dir = cfg.data.train_data_dir
+        data_dir = cfg.data.train_data_dirs
         data_dir_list = os.listdir(data_dir)
+        n_per_file = cfg.training.ntrajs // len(data_dir_list)
+
     elif mode == 'eval':
         data_dir = ''
         data_dir_list = [cfg.data.eval_data_dir]
+        n_per_file = cfg.sampler.ntrajs // len(data_dir_list)
 
+    n = n_per_file * len(data_dir_list)
+    all_data = torch.empty((n, cfg.data.d, cfg.data.n_max))
+    all_cond = torch.empty((n, cfg.model.cond_dim))
+
+    ptr = 0
     for subdir in data_dir_list:
         data_file = os.path.join(data_dir, subdir, 'pos-f.dat')
         params_file = os.path.join(data_dir, subdir, 'data_params.dat')
         output_file = os.path.join(data_dir, subdir, 'fe211_md.pt')
         if 'fe211_md.pt' in os.listdir(os.path.join(data_dir, subdir)):
             data = torch.load(
-                output_file, weights_only=True, map_location=cfg.device)
-            all_data.append(data['samples'])
-            all_cond.append(data['conds'])
+                output_file, weights_only=True, map_location='cpu')
+            all_data[ptr:ptr+n_per_file] = data['samples'][:n_per_file]
+            all_cond[ptr:ptr+n_per_file] = data['conds'][:n_per_file,:cfg.model.cond_dim]
         else:
             data = np.loadtxt(data_file, dtype=np.float32)
             data = data.reshape(-1, cfg.data.n_max, 2*cfg.data.d)
             data = torch.from_numpy(
-                data[:, :, :cfg.data.d]).permute(0, 2, 1).to(cfg.device)
+                data[:, :, :cfg.data.d]).permute(0, 2, 1)
 
-            temperature = read_temperature(params_file)
-            tau = 0.01 * torch.tensor(temperature, device=cfg.device)
+            tau = read_temperature(params_file)
+            tau = 0.01 * torch.tensor(tau)
             tau = tau.unsqueeze_(0).repeat(data.shape[0], 1)
             stress = read_stress(params_file)
-            stress = torch.tensor(stress, device=cfg.device)
-            stress = stress.unsqueeze_(0).repeat(data.shape[0], 1)
+            stress = torch.tensor(stress)
+            stress = 100 * (stress - torch.eye(cfg.model.cond_dim, cfg.model.cond_dim, device=stress.device))
+            stress = stress.flatten().repeat(data.shape[0], 1)
             cond = torch.cat((tau, stress), dim=1)
-
-            all_data.append(data)
-            all_cond.append(cond)
             torch.save({'samples': data, 'conds': cond}, output_file)
-    x_ref = get_init_pos(cfg)
-    ind_sam = index_sam(x_ref, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
-    all_data = torch.cat(all_data)
-    all_cond = torch.cat(all_cond)
+            all_data[ptr:ptr+n_per_file] = data[:n_per_file]
+            all_cond[ptr:ptr+n_per_file] = cond[:n_per_file,:cfg.model.cond_dim]
+        ptr += n_per_file
 
-    return all_data[:cfg.training.ntrajs], all_cond[:cfg.training.ntrajs], ind_sam
+    x_ref = get_init_pos(cfg, mode)
+    ind_sam = index_sam(x_ref, cfg.data.min_x, cfg.data.max_x, cfg.data.defm)
+
+    return all_data, all_cond, ind_sam.to(all_data.device)
 
 
 def read_temperature(file_path):
@@ -349,9 +400,7 @@ def read_stress(file_path):
         # Assuming the 11th line contains the Stress data
         stress_lines = lines[12:15]
         # Split the line and strip any extra whitespace
-        stress_values = []
-        for line in stress_lines:
-            stress_values.extend([float(val) for val in line.split()])
+        stress_values = [[float(val) for val in line.split()] for line in stress_lines]
         return stress_values
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ data:
   # problem: 'fe211'
   crystal: 'SC'
   # crystal: 'BCC'
-  d:
+  d: 1
   nx_max:
   na: 2
   nx: 4
@@ -19,7 +19,18 @@ data:
   n:
   nf:
   defm: 
-  grid_step:
+  - - 1.0
+  # defm:
+  # - - 1.0
+  #   - 0.0
+  #   - 0.0
+  # - - 0.0
+  #   - 1.0
+  #   - 0.0
+  # - - 0.0
+  #   - 0.0
+  #   - 1.0
+  grid_step: 0.1
   min_grid: 
   max_grid: 
   min_x: 
@@ -39,7 +50,7 @@ optim:
 
 model:
   name: 'NCSNpp'
-  cond_dim: 3
+  cond_dim: 1
   sigma_min: 0.01
   sigma_max: 0.3
   beta_min: 0.01

@@ -8,9 +8,9 @@ def get_optimizer(cfg, params):
     if cfg.optim.optimizer == 'Adam':
         optimizer = torch.optim.Adam(params, lr=cfg.optim.lr, betas=(cfg.optim.beta1, 0.999), eps=cfg.optim.eps,
                                      weight_decay=cfg.optim.weight_decay)
-    elif cfg.optim.optimizer == 'LBFGS':
-        optimizer = torch.optim.LBFGS(
-            params, lr=0.1, max_iter=10, max_eval=None, tolerance_grad=1e-09, tolerance_change=1e-11)
+    # elif cfg.optim.optimizer == 'LBFGS':
+    #     optimizer = torch.optim.LBFGS(
+    #         params, lr=0.1, max_iter=10, max_eval=None, tolerance_grad=1e-09, tolerance_change=1e-11)
     else:
         raise NotImplementedError(
             f'Optimizer {cfg.optim.optimizer} not supported yet!')
@@ -21,7 +21,7 @@ def get_optimizer(cfg, params):
 def optimization_manager(cfg):
     """Returns an optimize_fn based on `config`."""
 
-    def optimize_fn(optimizer, params, step, lr=cfg.optim.lr_train,
+    def optimize_fn(optimizer, params, step, lr=cfg.optim.lr,
                     warmup=cfg.optim.warmup,
                     grad_clip=cfg.optim.grad_clip):
         """Optimizes with warmup and gradient clipping (disabled if negative)."""
@@ -66,7 +66,7 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
     reduce_op = torch.mean if reduce_mean else lambda *args, **kwargs: 0.5 * \
         torch.sum(*args, **kwargs)
 
-    def loss_fn(model, batch, tau):
+    def loss_fn(model, batch, cond):
         """The loss function for training score-based generative models."""
         model_fn = utils.get_score_fn(sde, model, train)
         random_t = torch.rand(
@@ -74,7 +74,7 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
         z = torch.randn_like(batch)
         mean, std = sde.marginal_prob(batch, random_t)
         perturbed_x = mean + z * std[:, None, None]
-        score = model_fn(perturbed_x, random_t, tau)
+        score = model_fn(perturbed_x, random_t, cond)
 
         if not likelihood_weighting:
             losses = torch.square(score * std[:, None, None] + z)
@@ -89,7 +89,7 @@ def get_sde_loss_fn(sde, train, reduce_mean=True, likelihood_weighting=False, ep
     return loss_fn
 
 
-def get_step_fn(sde, train=True, optimizer=None, reduce_mean=False, likelihood_weighting=False):
+def get_step_fn(sde, train=True, optimize_fn=None, reduce_mean=False, likelihood_weighting=False):
     """Returns a step function based on `config`."""
     if train:
         loss_fn = get_sde_loss_fn(
@@ -97,12 +97,14 @@ def get_step_fn(sde, train=True, optimizer=None, reduce_mean=False, likelihood_w
     else:
         pass
 
-    def step_fn(state, batch, tau):
+    def step_fn(state, batch, cond):
         model = state['model']
+        optimizer = state['optimizer']
         optimizer.zero_grad()
-        loss = loss_fn(model, batch, tau)
+        loss = loss_fn(model, batch, cond)
         loss.backward()
-        optimizer.step()
+        optimize_fn(optimizer, model.parameters(), state['step'])
+        # optimizer.step()
         # state['step'] += 1
         return loss
 

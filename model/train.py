@@ -67,11 +67,12 @@ def train_model(rank, cfg):
         raise NotImplementedError(f"SDE {cfg.training.sde} unknown.")
 
     # Build training and evaluation functions
+    optimize_fn = losses.optimization_manager(cfg)
     reduce_mean = cfg.training.reduce_mean
     likelihood_weighting = cfg.training.likelihood_weighting
-    train_step_fn = losses.get_step_fn(sde, train=True, optimizer=optimizer, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
-    sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_eps)
-    evaluate_fn = utils.get_evaluate_fn(cfg, save_eval=True)
+    train_step_fn = losses.get_step_fn(sde, train=True, optimize_fn=optimize_fn, reduce_mean=reduce_mean, likelihood_weighting=likelihood_weighting)
+    # sampling_fn = sampling.get_sampling_fn(cfg, sde, sampling_eps)
+    # evaluate_fn = utils.get_evaluate_fn(cfg, save_eval=True)
 
     if rank is None or rank == 0:
         tqdm.write(f"========================== Starting Training ==========================")

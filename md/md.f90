@@ -100,7 +100,6 @@ contains
     open(11, file=trim(output_dir)//'/stress.dat')
     open(15, file=trim(output_dir)//'/data_params.dat', position='append')
 
-    write(15, *) 'nsample,', nsamp
     write(15, *) 'defm,'
     do n=1,3
        write(15, '(3F10.5)') defm(n, :)

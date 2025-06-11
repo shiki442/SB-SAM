@@ -6,6 +6,7 @@ import os
 import itertools
 import yaml
 import math
+import warnings
 
 
 def load_config(config_file=None):
@@ -22,13 +23,20 @@ def load_config(config_file=None):
     return cfg
 
 
-def check_data_config(cfg):
+def check_data_config(cfg, mode='train'):
     data = cfg.data
+    if mode == 'train':
+        data_dir = os.listdir(data.train_data_dirs)[0]
+        path_data_params = os.path.join(data.train_data_dirs, data_dir, 'data_params.dat')
+        n_data_dirs = len(os.listdir(data.train_data_dirs))
+    elif mode == 'eval':
+        path_data_params = os.path.join(data.eval_data_dir, 'data_params.dat')
+        n_data_dirs = 1
+
     if data.crystal == 'SC':
         assert data.nx <= data.nx_max
     if data.crystal == 'BCC':
-        data_dir = os.path.join(data.eval_data_dir, 'data_params.dat')
-        params = read_params(data_dir)
+        params = read_params(path_data_params)
         data.d = params['ndim']
         data.grid_step = params['a0']
         data.nx_max = params['nx']
@@ -36,7 +44,20 @@ def check_data_config(cfg):
         data.na = params['na']
         data.nf = params['nf']
         data.defm = params['defm']
+        n_per_file = params['nsample']
+        if mode == 'train':
+            data.train_params_dir = os.path.join(data.train_data_dirs, data_dir)
         assert data.nx <= data.nx_max
+
+        if mode == 'train' and (cfg.training.ntrajs > n_data_dirs * n_per_file):
+            warnings.warn(f"Number of trajectories ({cfg.training.ntrajs}) is greater than the number of all data files ({n_data_dirs * n_per_file}). "
+                        "This may lead to insufficient training data.")
+            cfg.training.ntrajs = n_data_dirs * n_per_file
+        if mode == 'eval' and (cfg.sampler.ntrajs > n_data_dirs * n_per_file):
+            warnings.warn(f"Number of trajectories ({cfg.sampler.ntrajs}) is greater than the number of all data files ({n_data_dirs * n_per_file}). "
+                        "This may lead to insufficient evaluation data.")
+            cfg.sampler.ntrajs = n_data_dirs * n_per_file
+    
     assert cfg.training.batch_size <= cfg.training.ntrajs
     data.n = data.nx ** data.d * data.na
     data.n_max = data.nx_max ** data.d * data.na
@@ -79,13 +100,14 @@ def check_path_config(cfg, work_dir='./', mode='train'):
             work_dir, f'output/{timestamp}_N{cfg.data.n_max}_n{cfg.data.n}_d{cfg.data.d}/')
     path.checkpoints = os.path.join(path.output, "checkpoints")
     path.params = os.path.join(path.output, "params", "config.yml")
-    if mode == 'eval':
-        path.eval = os.path.join(path.output, f"eval_{cfg.eval.cond}")
 
     os.makedirs(path.output, exist_ok=True)
     os.makedirs(path.checkpoints, exist_ok=True)
-    os.makedirs(path.eval, exist_ok=True)
     os.makedirs(os.path.dirname(path.params), exist_ok=True)
+
+    if mode == 'eval':
+        path.eval = os.path.join(path.output, f"eval_{cfg.eval.cond}")
+        os.makedirs(path.eval, exist_ok=True)
 
 
 def save_config(cfg):
@@ -121,7 +143,7 @@ def check_config(cfg, params_iter=None, save_cfg=True, mode='train'):
     if params_iter is not None:
         cfg.dynamics.k_near = params_iter['k_nearest']
         cfg.data.nx = params_iter['n']
-    check_data_config(cfg)
+    check_data_config(cfg, mode=mode)
     check_path_config(cfg, mode=mode)
     if save_cfg:
         save_config(cfg)

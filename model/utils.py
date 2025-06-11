@@ -50,11 +50,12 @@ def create_model(config):
 def get_score_fn(sde, model, train):
     """Wraps `score_fn` so that the model output corresponds to a real time-dependent score function."""
 
-    def score_fn(x, t, cond):
+    def score_fn(x, t, cond=None):
         score = model(x, t, cond)
         std = sde.marginal_prob(torch.zeros_like(x), t)[1]
         score = -score / std[:, None, None]
-        return score / cond[:, 0:1, None]
+        # score = score / cond[:, 0:1, None]
+        return score
 
     return score_fn
 
@@ -69,6 +70,7 @@ def get_evaluate_fn(cfg, save_eval=True):
     potential_fn = get_potential_fn(cfg)
 
     def evaluate_fn(x_pred):
+        x_pred = x_pred.to(mean_true.device)
         x_pred = process_data(x_pred, mean_true, cfg)
 
         mean_pred = torch.mean(x_pred, axis=0)
@@ -137,7 +139,7 @@ def get_force_mat(cfg, n):
             diag = diag_vals[i] * torch.ones(n - i)
             Fmat[0] = Fmat[0] + \
                 torch.diag(diag, diagonal=i) + torch.diag(diag, diagonal=-i)
-    return Fmat.to(cfg.device)
+    return Fmat
 
 
 def create_and_save_hist(x_pred, x_true, path):
@@ -170,7 +172,7 @@ def create_and_save_hist2d(x_pred, x_true, path):
     axes[1].set_ylabel('Y axis')
     
     fig.colorbar(axes[0].collections[0], ax=axes[0], label='Counts')
-    fig.colorbar(axes[1].collections[0], ax=axes[1], label='Counts')
+    # fig.colorbar(axes[1].collections[0], ax=axes[1], label='Counts')
     
     path = os.path.join(path, 'hist2d.png')
     plt.savefig(path)
@@ -184,8 +186,11 @@ def compute_rdf(positions, box_size, r_max, r_min, bin_width):
     num_bins = num_bins + 1 if math.modf(r_max / bin_width)[0] > 0.99 else num_bins
     num_bins_cutoff = int(r_min / bin_width)
     rdf_hist = torch.zeros(num_bins, device=positions.device)
-    num_particles = positions.shape[0] * positions.shape[-1]
-    positions = positions - torch.floor(positions / box_size) * box_size
+    # num_particles = positions.shape[0] * positions.shape[-1]
+    positions = positions.permute(0, 2, 1).contiguous().view(-1, positions.shape[1])
+    mask = torch.max(positions, dim=-1)[0] > box_size
+    positions = positions[~mask]
+    num_particles = positions.shape[0]
     for i in [-1, 1]:
         for j in [-1, 1]:
             for k in [-1, 1]:
@@ -196,7 +201,7 @@ def compute_rdf(positions, box_size, r_max, r_min, bin_width):
                 r = torch.linalg.norm(positions_shifted, axis=1)
                 mask = r < r_max
                 bin_index = (r[mask] / bin_width).to(torch.int64)
-                rdf_hist += torch.bincount(bin_index)
+                rdf_hist += torch.bincount(bin_index, minlength=num_bins)
 
     r_values = (torch.arange(num_bins, device=positions.device) + 0.5) * bin_width
     shell_volumes = (4 / 3) * torch.pi * \
@@ -210,8 +215,10 @@ def compute_rdf(positions, box_size, r_max, r_min, bin_width):
 
 def create_and_save_rdf(x_pred, x_true, path, a0):
     fig, ax = plt.subplots(figsize=(15, 5))
-    r_values, g_r = compute_rdf(x_pred, 6*a0, 6*a0, 0.5*a0, a0/64)
-    r_values_true, g_r_true = compute_rdf(x_true, 6*a0, 6*a0, 0.5*a0, a0/64)
+    r_values, g_r = compute_rdf(x_pred, 12*a0, 12*a0, 0.5*a0, a0/128)
+    # g_r = g_r / torch.max(g_r)
+    r_values_true, g_r_true = compute_rdf(x_true, 12*a0, 12*a0, 0.5*a0, a0/128)
+    # g_r_true = g_r_true / torch.max(g_r_true)
 
     ax.plot(r_values.cpu(), g_r.cpu(), label='Predicted RDF')
     ax.plot(r_values_true.cpu(), g_r_true.cpu(), label='True RDF')

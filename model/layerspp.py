@@ -198,6 +198,70 @@ class ResnetBlockDDPMpp(nn.Module):
         else:
             return (x + h) / np.sqrt(2.)
 
+class Conditioner(nn.Module):
+    """Conditioning network for FiLM."""
+
+    def __init__(self, in_dim, embed_dim, act, cond_drop_prob=0.1, batch_norm=False):
+        super().__init__()
+        self.in_dim = in_dim
+        self.embed_dim = embed_dim
+        self.act = act
+        self.cond_drop_prob = cond_drop_prob
+        self.batch_norm = batch_norm
+        self.batch_norm = nn.BatchNorm1d(in_dim, affine=False)
+
+        self.Dense_0 = nn.Linear(in_dim, embed_dim)
+        self.Dense_0.weight.data = default_init()(self.Dense_0.weight.data.shape)
+        nn.init.zeros_(self.Dense_0.bias)
+        
+        self.Dense_1 = nn.Linear(embed_dim, embed_dim)
+        self.Dense_1.weight.data = default_init()(self.Dense_1.weight.data.shape)
+        nn.init.zeros_(self.Dense_1.bias)
+
+    @staticmethod
+    def prob_mask_like(shape, prob, device):
+        if prob == 1:
+            return torch.ones(shape, device = device, dtype = torch.bool)
+        elif prob == 0:
+            return torch.zeros(shape, device = device, dtype = torch.bool)
+        else:
+            return torch.zeros(shape, device = device).float().uniform_(0, 1) < prob
+
+    def forward(self, conditions):
+        batch = len(conditions)
+        cond_embeds = conditions
+        if self.batch_norm:
+            cond_embeds = self.batch_norm(cond_embeds)
+        if self.cond_drop_prob > 0. and self.training:
+            prob_keep_mask = self.prob_mask_like((batch, 1), 1. - self.cond_drop_prob, cond_embeds.device)
+            cond_embeds = prob_keep_mask * cond_embeds
+        return self.Dense_1(self.act(self.Dense_0(cond_embeds)))
+
+class FiLM(nn.Module):
+    def __init__(
+        self,
+        dim,
+        hidden_dim,
+        act
+    ):
+        super().__init__()
+        self.Dense_0 = nn.Linear(dim, hidden_dim * 4)
+        self.Dense_0.weight.data = default_init()(self.Dense_0.weight.data.shape)
+        nn.init.zeros_(self.Dense.bias)
+
+        self.Dense_1 = nn.Linear(hidden_dim * 4, hidden_dim * 2)
+        self.Dense_1.weight.data = default_init()(self.Dense_1.weight.data.shape)
+        nn.init.zeros_(self.Dense_1.bias)
+
+        self.net = nn.Sequential(
+            self.Dense_0,
+            act,
+            self.Dense_1
+        )
+
+    def forward(self, conditions, hiddens):
+        scale, shift = self.net(conditions).chunk(2, dim = -1)
+        return hiddens * (scale + 1) + shift
 
 if __name__ == "__main__":
 

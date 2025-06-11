@@ -5,7 +5,7 @@ MODULE CMM_PARMS
   PUBLIC
   
   ! -- SYSTEM SIZE
-  INTEGER, PARAMETER :: NX=12, NY=12, NZ=12, NA=2, NMAX=NX*NY*NZ*NA
+  INTEGER, PARAMETER :: NX=4, NY=4, NZ=4, NA=2, NMAX=NX*NY*NZ*NA
   INTEGER, PARAMETER :: NDIM=3
 
   ! -- TOTAL NUMBER OF DEGREES OF FREEDOM
@@ -84,7 +84,7 @@ contains
     write(60, *) 'a0,', a0
     write(60, *) 'KT,', KT
     write(60, *) 'Temperature,', Temperature
-    write(60, *) 'nsamp,', nsamp
+    write(60, *) 'nsample,', nsamp
 
     close(60)
   end subroutine
